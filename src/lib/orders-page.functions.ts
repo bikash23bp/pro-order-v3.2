@@ -22,6 +22,7 @@ const OrdersInput = z.object({
 type CountBucket = { count: number; amount: number };
 
 const ORDER_LIST_SELECT = "id, order_number, invoice_number, customer_name, customer_phone, customer_email, customer_address, status, total_amount, delivery_charge, discount_amount, advance_amount, advance_source_id, advance_txn_id, subtotal, created_at, consignment_id, tracking_url, invoice_note, internal_note, courier_id, order_source_id, source, preorder, preorder_date, customer_type, created_by, updated_by, oms_sender_name, oms_sender_order_no, source_site_id, is_paid_marketing, order_sources(name), order_items(quantity, unit_price, products(name), product_variants(attributes))";
+const ORDER_LIST_COUNT_MODE: "planned" = "planned";
 
 const ACTIVE_ORDER_STATUSES = new Set([
   "pending_web",
@@ -193,6 +194,41 @@ function applyFilters(qb: any, data: z.infer<typeof OrdersInput>) {
   return qb.eq("status", data.status);
 }
 
+async function enrichOrdersForList(context: any, orders: any[]) {
+  const userIds = Array.from(new Set([
+    ...orders.map((o: any) => o.created_by).filter(Boolean),
+    ...orders.map((o: any) => o.updated_by).filter(Boolean),
+  ]));
+  const siteIds = Array.from(new Set(orders.map((o: any) => o.source_site_id).filter(Boolean))) as string[];
+
+  const [profileRes, siteRes, flagMap] = await Promise.all([
+    userIds.length
+      ? context.supabase.from("profiles").select("id, full_name, email").in("id", userIds)
+      : Promise.resolve({ data: [] }),
+    siteIds.length
+      ? context.supabase.from("integrations").select("id, name, site_url").in("id", siteIds)
+      : Promise.resolve({ data: [] }),
+    getVisibleOrderFlags(context.supabase, orders),
+  ]);
+
+  const profileMap = Object.fromEntries((profileRes.data ?? []).map((p: any) => [
+    p.id,
+    { full_name: p.full_name, email: p.email },
+  ]));
+  const siteMap = Object.fromEntries((siteRes.data ?? []).map((s: any) => [
+    s.id,
+    s.name || (s.site_url ? String(s.site_url).replace(/^https?:\/\//, "").replace(/\/+$/, "") : null),
+  ]));
+
+  return orders.map((o: any) => ({
+    ...o,
+    creator: o.created_by ? (profileMap[o.created_by] ?? null) : null,
+    editor: o.updated_by ? (profileMap[o.updated_by] ?? null) : null,
+    site_name: o.source_site_id ? (siteMap[o.source_site_id] ?? null) : null,
+    customer_flags: flagMap[o.id] ?? { is_vip: false, is_repeat: false, is_duplicate: false, returned_count: 0 },
+  }));
+}
+
 async function getVisibleOrderFlags(supabase: any, orders: any[]) {
   const norms = Array.from(new Set(orders.map((o) => normalizePhoneForFlags(o.customer_phone ?? "")).filter(Boolean))) as string[];
   const emails = Array.from(new Set(orders.map((o) => String(o.customer_email ?? "").trim().toLowerCase()).filter(Boolean)));
@@ -267,7 +303,7 @@ export const listOrdersPage = createServerFn({ method: "POST" })
       // Filter by the dedicated `incomplete` status so the list always matches the tab count.
       let qb: any = context.supabase
         .from("orders")
-        .select(ORDER_LIST_SELECT, { count: "exact" })
+        .select(ORDER_LIST_SELECT, { count: ORDER_LIST_COUNT_MODE })
         .eq("status", "incomplete");
       qb = applyCommonFilters(qb, data);
       qb = applyOmsAccessFilter(qb, omsAllowed);
@@ -285,7 +321,7 @@ export const listOrdersPage = createServerFn({ method: "POST" })
         if ((count || 0) > 0) {
           let fallbackQb: any = context.supabase
             .from("orders")
-            .select(ORDER_LIST_SELECT, { count: "exact" })
+            .select(ORDER_LIST_SELECT, { count: ORDER_LIST_COUNT_MODE })
             .eq("status", "incomplete");
           fallbackQb = applyCommonFilters(fallbackQb, data);
           fallbackQb = applyOmsAccessFilter(fallbackQb, omsAllowed);
@@ -305,45 +341,8 @@ export const listOrdersPage = createServerFn({ method: "POST" })
 
 
 
-      const userIds = Array.from(new Set([
-        ...orders.map((o: any) => o.created_by).filter(Boolean),
-        ...orders.map((o: any) => o.updated_by).filter(Boolean),
-      ]));
-      let profileMap: Record<string, { full_name: string | null; email: string | null }> = {};
-      if (userIds.length) {
-        const { data: profs } = await context.supabase
-          .from("profiles")
-          .select("id, full_name, email")
-          .in("id", userIds);
-        profileMap = Object.fromEntries((profs ?? []).map((p: any) => [
-          p.id,
-          { full_name: p.full_name, email: p.email },
-        ]));
-      }
-
-      // Resolve source site (WP integration) name for each row so the UI can show which site each incomplete order came from.
-      const siteIds = Array.from(new Set(orders.map((o: any) => o.source_site_id).filter(Boolean))) as string[];
-      let siteMap: Record<string, string | null> = {};
-      if (siteIds.length) {
-        const { data: sites } = await context.supabase
-          .from("integrations")
-          .select("id, name, site_url")
-          .in("id", siteIds);
-        siteMap = Object.fromEntries((sites ?? []).map((s: any) => [
-          s.id,
-          s.name || (s.site_url ? String(s.site_url).replace(/^https?:\/\//, "").replace(/\/+$/, "") : null),
-        ]));
-      }
-      const flagMap = await getVisibleOrderFlags(context.supabase, orders);
-
       return {
-        rows: orders.map((o: any) => ({
-          ...o,
-          creator: o.created_by ? (profileMap[o.created_by] ?? null) : null,
-          editor: o.updated_by ? (profileMap[o.updated_by] ?? null) : null,
-          site_name: o.source_site_id ? (siteMap[o.source_site_id] ?? null) : null,
-          customer_flags: flagMap[o.id] ?? { is_vip: false, is_repeat: false, is_duplicate: false, returned_count: 0 },
-        })),
+        rows: await enrichOrdersForList(context, orders),
         totalCount: count ?? 0,
         currentPage: Math.min(data.page, Math.max(1, Math.ceil((count ?? 0) / data.limit) || 1)),
       };
@@ -351,7 +350,7 @@ export const listOrdersPage = createServerFn({ method: "POST" })
 
     let qb: any = context.supabase
       .from("orders")
-      .select(ORDER_LIST_SELECT, { count: "exact" });
+      .select(ORDER_LIST_SELECT, { count: ORDER_LIST_COUNT_MODE });
     qb = applyFilters(qb, data);
     qb = applyOmsAccessFilter(qb, omsAllowed);
     let { data: rows, error, count } = await qb.order("created_at", { ascending: false }).range(offset, offset + data.limit - 1);
@@ -366,7 +365,7 @@ export const listOrdersPage = createServerFn({ method: "POST" })
       if ((count || 0) > 0) {
         let fallbackQb: any = context.supabase
           .from("orders")
-          .select(ORDER_LIST_SELECT, { count: "exact" });
+          .select(ORDER_LIST_SELECT, { count: ORDER_LIST_COUNT_MODE });
         fallbackQb = applyFilters(fallbackQb, data);
         fallbackQb = applyOmsAccessFilter(fallbackQb, omsAllowed);
         const fallbackOffset = (fallbackPage - 1) * data.limit;
@@ -384,39 +383,8 @@ export const listOrdersPage = createServerFn({ method: "POST" })
 
     const orders = rows ?? [];
 
-    const userIds = Array.from(new Set([
-      ...orders.map((o: any) => o.created_by).filter(Boolean),
-      ...orders.map((o: any) => o.updated_by).filter(Boolean),
-    ]));
-    let profileMap: Record<string, { full_name: string | null; email: string | null }> = {};
-    if (userIds.length) {
-      const { data: profs } = await context.supabase.from("profiles").select("id, full_name, email").in("id", userIds);
-      profileMap = Object.fromEntries((profs ?? []).map((p: any) => [p.id, { full_name: p.full_name, email: p.email }]));
-    }
-
-    // Resolve source site (WP integration) name for each row so the UI can show which site each order came from.
-    const siteIds = Array.from(new Set(orders.map((o: any) => o.source_site_id).filter(Boolean))) as string[];
-    let siteMap: Record<string, string | null> = {};
-    if (siteIds.length) {
-      const { data: sites } = await context.supabase
-        .from("integrations")
-        .select("id, name, site_url")
-        .in("id", siteIds);
-      siteMap = Object.fromEntries((sites ?? []).map((s: any) => [
-        s.id,
-        s.name || (s.site_url ? String(s.site_url).replace(/^https?:\/\//, "").replace(/\/+$/, "") : null),
-      ]));
-    }
-    const flagMap = await getVisibleOrderFlags(context.supabase, orders);
-
     return {
-      rows: orders.map((o: any) => ({
-        ...o,
-        creator: o.created_by ? (profileMap[o.created_by] ?? null) : null,
-        editor: o.updated_by ? (profileMap[o.updated_by] ?? null) : null,
-        site_name: o.source_site_id ? (siteMap[o.source_site_id] ?? null) : null,
-        customer_flags: flagMap[o.id] ?? { is_vip: false, is_repeat: false, is_duplicate: false, returned_count: 0 },
-      })),
+      rows: await enrichOrdersForList(context, orders),
       totalCount: count ?? 0,
       currentPage: Math.min(data.page, Math.max(1, Math.ceil((count ?? 0) / data.limit) || 1)),
     };

@@ -513,8 +513,8 @@ function OrdersPage() {
     queryKey: ordersQueryKey,
     enabled: !!session,
     placeholderData: (previousData) => previousData,
-    staleTime: 30_000,
-    gcTime: 5 * 60_000,
+    staleTime: 2 * 60_000,
+    gcTime: 15 * 60_000,
     refetchOnWindowFocus: false,
     queryFn: async () => {
       return await listOrders({ data: {
@@ -529,6 +529,43 @@ function OrdersPage() {
       } });
     },
   });
+
+  const orderListPayload = (status: string, nextPage = 1) => ({
+    status, page: nextPage, limit,
+    source: sourceFilter, site: siteFilter, courier: courierFilter,
+    partner: partnerFilter, staff: staffFilter,
+    from: datePreset === "all" ? null : fromIso,
+    to: datePreset === "all" ? null : toIso,
+    q: debouncedQ,
+    tagPhones: tagPhoneFilter,
+    advanceOnly,
+  });
+
+  const orderListQueryKeyFor = (status: string, nextPage = 1) => [
+    "orders", "list",
+    { status, page: nextPage, limit, source: sourceFilter, site: siteFilter, courier: courierFilter,
+      partner: partnerFilter, staff: staffFilter,
+      preset: datePreset, from: fromIso, to: toIso, q: debouncedQ, tagPhones: tagPhoneFilter,
+      advanceOnly },
+  ];
+
+  const prefetchOrderTab = (status: string) => {
+    if (!session) return;
+    void queryClient.prefetchQuery({
+      queryKey: orderListQueryKeyFor(status),
+      queryFn: () => listOrders({ data: orderListPayload(status) }),
+      staleTime: 2 * 60_000,
+      gcTime: 15 * 60_000,
+    });
+  };
+
+  const selectOrderTab = (status: string) => {
+    setStatusFilter(status);
+    setHasManualStatusSelection(true);
+    setTabsOpen(false);
+    navigate({ to: "/orders", search: (prev: { status?: string; page?: number; limit?: number }) => ({ ...prev, status, page: 1 }) });
+    prefetchOrderTab(status);
+  };
 
   const rows: Order[] = ordersQuery.data?.rows ?? [];
   const totalCount = ordersQuery.data?.totalCount ?? 0;
@@ -708,6 +745,15 @@ function OrdersPage() {
     }
     return out;
   }, [tabCountsData]);
+
+  useEffect(() => {
+    if (!session || !tabCountsData) return;
+    const warmTabs = TAB_STATUSES
+      .filter((tab) => tab.key !== effectiveStatusFilter && (tabCounts[tab.key] ?? 0) > 0)
+      .slice(0, 8);
+    const timers = warmTabs.map((tab, index) => window.setTimeout(() => prefetchOrderTab(tab.key), 250 + index * 350));
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [session, tabCountsData, tabCounts, effectiveStatusFilter]);
 
   const fmtAmount = (n: number) => {
     if (n >= 100000) return `${(n / 1000).toFixed(0)}k`;
@@ -1336,7 +1382,9 @@ function OrdersPage() {
                   <button
                     key={tab.key}
                     type="button"
-                    onClick={() => { setStatusFilter(tab.key); setHasManualStatusSelection(true); setTabsOpen(false); goToPage(1); }}
+                    onMouseEnter={() => prefetchOrderTab(tab.key)}
+                    onFocus={() => prefetchOrderTab(tab.key)}
+                    onClick={() => selectOrderTab(tab.key)}
                     className={cls}
                     data-tab-key={tab.key}
                     aria-pressed={active}
@@ -1350,7 +1398,7 @@ function OrdersPage() {
                   <button
                     key={tab.key}
                     type="button"
-                    onClick={() => { setStatusFilter(tab.key); setTabsOpen(false); }}
+                    onClick={() => selectOrderTab(tab.key)}
                     className={cls}
                     title={isPreorderAlert ? `${preorderDueCount} pre-order(s) due today or overdue` : undefined}
                     data-tab-key={tab.key}
@@ -1372,7 +1420,9 @@ function OrdersPage() {
                   <button
                     key={tab.key}
                     type="button"
-                    onClick={() => { setStatusFilter(tab.key); setHasManualStatusSelection(true); setTabsOpen(false); goToPage(1); }}
+                    onMouseEnter={() => prefetchOrderTab(tab.key)}
+                    onFocus={() => prefetchOrderTab(tab.key)}
+                    onClick={() => selectOrderTab(tab.key)}
                     className={`flex flex-col items-center justify-center rounded-md border-2 px-1.5 py-1 w-full min-w-0 shadow-sm transition-colors cursor-pointer select-none ${c.border} ${c.hover} ${active ? `${c.activeBg} ${c.activeText} shadow-md` : ""}`}
                     data-tab-key={tab.key}
                     aria-pressed={active}
