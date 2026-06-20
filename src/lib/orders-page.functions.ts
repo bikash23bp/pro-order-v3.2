@@ -278,29 +278,19 @@ export const listOrdersPage = createServerFn({ method: "POST" })
         .order("created_at", { ascending: false })
         .range(offset, offset + data.limit - 1);
       if (isRangeNotSatisfiable(error)) {
-        let cq: any = context.supabase.from("orders").select("id", { count: "exact", head: true }).eq("status", "incomplete");
-        cq = applyCommonFilters(cq, data);
-        cq = applyOmsAccessFilter(cq, omsAllowed);
-        const { count: c2, error: countError } = await cq;
-        if (countError) throw new Error(countError.message);
-        count = c2 ?? 0;
-        const fallbackPage = Math.max(1, Math.ceil((count || 0) / data.limit));
-        if ((count || 0) > 0) {
-          let fallbackQb: any = context.supabase
-            .from("orders")
-            .select(ORDER_LIST_SELECT, { count: ORDER_LIST_COUNT_MODE })
-            .eq("status", "incomplete");
-          fallbackQb = applyCommonFilters(fallbackQb, data);
-          fallbackQb = applyOmsAccessFilter(fallbackQb, omsAllowed);
-          const fallbackOffset = (fallbackPage - 1) * data.limit;
-          const { data: fallbackRows, error: fallbackError } = await fallbackQb
-            .order("created_at", { ascending: false })
-            .range(fallbackOffset, fallbackOffset + data.limit - 1);
-          if (fallbackError) throw new Error(fallbackError.message);
-          rows = fallbackRows ?? [];
-        } else {
-          rows = [];
-        }
+        let fallbackQb: any = context.supabase
+          .from("orders")
+          .select(ORDER_LIST_SELECT, { count: ORDER_LIST_COUNT_MODE })
+          .eq("status", "incomplete");
+        fallbackQb = applyCommonFilters(fallbackQb, data);
+        fallbackQb = applyOmsAccessFilter(fallbackQb, omsAllowed);
+        const { data: fallbackRows, error: fallbackError, count: fallbackCount } = await fallbackQb
+          .order("created_at", { ascending: false })
+          .range(0, data.limit - 1);
+        if (fallbackError) throw new Error(fallbackError.message);
+        rows = fallbackRows ?? [];
+        count = fallbackCount ?? rows.length;
+        data.page = 1;
         error = null as any;
       }
       if (error) throw new Error(error.message);
@@ -322,28 +312,18 @@ export const listOrdersPage = createServerFn({ method: "POST" })
     qb = applyOmsAccessFilter(qb, omsAllowed);
     let { data: rows, error, count } = await qb.order("created_at", { ascending: false }).range(offset, offset + data.limit - 1);
     if (isRangeNotSatisfiable(error)) {
-      let cq: any = context.supabase.from("orders").select("id", { count: "exact", head: true });
-      cq = applyFilters(cq, data);
-      cq = applyOmsAccessFilter(cq, omsAllowed);
-      const { count: c2, error: countError } = await cq;
-      if (countError) throw new Error(countError.message);
-      count = c2 ?? 0;
-      const fallbackPage = Math.max(1, Math.ceil((count || 0) / data.limit));
-      if ((count || 0) > 0) {
-        let fallbackQb: any = context.supabase
-          .from("orders")
-          .select(ORDER_LIST_SELECT, { count: ORDER_LIST_COUNT_MODE });
-        fallbackQb = applyFilters(fallbackQb, data);
-        fallbackQb = applyOmsAccessFilter(fallbackQb, omsAllowed);
-        const fallbackOffset = (fallbackPage - 1) * data.limit;
-        const { data: fallbackRows, error: fallbackError } = await fallbackQb
-          .order("created_at", { ascending: false })
-          .range(fallbackOffset, fallbackOffset + data.limit - 1);
-        if (fallbackError) throw new Error(fallbackError.message);
-        rows = fallbackRows ?? [];
-      } else {
-        rows = [];
-      }
+      let fallbackQb: any = context.supabase
+        .from("orders")
+        .select(ORDER_LIST_SELECT, { count: ORDER_LIST_COUNT_MODE });
+      fallbackQb = applyFilters(fallbackQb, data);
+      fallbackQb = applyOmsAccessFilter(fallbackQb, omsAllowed);
+      const { data: fallbackRows, error: fallbackError, count: fallbackCount } = await fallbackQb
+        .order("created_at", { ascending: false })
+        .range(0, data.limit - 1);
+      if (fallbackError) throw new Error(fallbackError.message);
+      rows = fallbackRows ?? [];
+      count = fallbackCount ?? rows.length;
+      data.page = 1;
       error = null as any;
     }
     if (error) throw new Error(error.message);
