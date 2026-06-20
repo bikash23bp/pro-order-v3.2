@@ -1,6 +1,6 @@
 import { createLazyFileRoute, Link, useSearch, useNavigate } from "@tanstack/react-router";
 import { MemberBadge } from "@/components/MemberBadge";
-import { useEffect, useMemo, useRef, useState, Fragment } from "react";
+import { useEffect, useMemo, useRef, useState, Fragment, lazy, Suspense } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Plus, Search, Eye, Trash2, FileText, RefreshCw, Pencil, Printer, Send, Crown, Loader2, Truck, Download, Phone, Upload, StickyNote, UserPlus, ChevronDown, ChevronUp } from "lucide-react";
@@ -23,12 +23,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { EditOrderDialog, type EditableOrder } from "@/components/orders/EditOrderDialog";
+import type { EditableOrder } from "@/components/orders/EditOrderDialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { OrderDetailDialog } from "@/components/orders/OrderDetailDialog";
-import { CustomerProfileDialog } from "@/components/customers/CustomerProfileDialog";
 import { DuplicateBadge } from "@/components/orders/DuplicateBadge";
 import { listAllTagsByPhone, normalizePhoneKey, CUSTOMER_TAGS, TAG_LABEL, type CustomerTag } from "@/lib/tags.functions";
 import { getDuplicatePhones } from "@/lib/duplicates.functions";
@@ -39,10 +37,24 @@ import { exportOrdersPage, getOrderCountsPage, getOrderFilterOptions, listOrders
 import { listIntegrationLabels } from "@/lib/integrations.functions";
 import { importTelesalesCustomers } from "@/lib/telesales.functions";
 import { syncAllCourierStatuses } from "@/lib/courier-sync.functions";
-import { ImportOrdersDialog } from "@/components/orders/ImportOrdersDialog";
 import { useOrderTemplate } from "@/hooks/use-order-template";
 import { checkBlockedPhones, blockCustomer } from "@/lib/blocked-customers.functions";
-import { BlockCustomerDialog } from "@/components/customers/BlockCustomerDialog";
+
+const EditOrderDialog = lazy(() =>
+  import("@/components/orders/EditOrderDialog").then((m) => ({ default: m.EditOrderDialog })),
+);
+const OrderDetailDialog = lazy(() =>
+  import("@/components/orders/OrderDetailDialog").then((m) => ({ default: m.OrderDetailDialog })),
+);
+const CustomerProfileDialog = lazy(() =>
+  import("@/components/customers/CustomerProfileDialog").then((m) => ({ default: m.CustomerProfileDialog })),
+);
+const ImportOrdersDialog = lazy(() =>
+  import("@/components/orders/ImportOrdersDialog").then((m) => ({ default: m.ImportOrdersDialog })),
+);
+const BlockCustomerDialog = lazy(() =>
+  import("@/components/customers/BlockCustomerDialog").then((m) => ({ default: m.BlockCustomerDialog })),
+);
 import { ShieldAlert, ShieldOff } from "lucide-react";
 
 type OrderStatus =
@@ -1123,7 +1135,11 @@ function OrdersPage() {
           </Button>
         </div>
       </div>
-      <ImportOrdersDialog open={importOpen} onOpenChange={setImportOpen} onDone={() => load(true)} />
+      {importOpen && (
+        <Suspense fallback={null}>
+          <ImportOrdersDialog open={importOpen} onOpenChange={setImportOpen} onDone={() => load(true)} />
+        </Suspense>
+      )}
 
       <Card>
         <CardHeader className="px-2 pb-3 space-y-3 sm:px-6">
@@ -1711,7 +1727,9 @@ function OrdersPage() {
         </CardContent>
       </Card>
 
-      {viewing && <OrderDetailDialog order={viewing} onClose={() => setViewing(null)} onEdit={() => setEditing({
+      {viewing && (
+        <Suspense fallback={null}>
+          <OrderDetailDialog order={viewing} onClose={() => setViewing(null)} onEdit={() => setEditing({
         id: viewing.id,
         order_number: viewing.order_number,
         customer_name: viewing.customer_name,
@@ -1725,15 +1743,23 @@ function OrdersPage() {
         invoice_note: viewing.invoice_note,
         internal_note: viewing.internal_note,
         status: viewing.status,
-      })} />}
-      {editing && <EditOrderDialog order={editing} onClose={() => setEditing(null)} onSaved={load} />}
+          })} />
+        </Suspense>
+      )}
+      {editing && (
+        <Suspense fallback={null}>
+          <EditOrderDialog order={editing} onClose={() => setEditing(null)} onSaved={load} />
+        </Suspense>
+      )}
       {profilePhone && (
-        <CustomerProfileDialog
-          phone={profilePhone}
-          open={!!profilePhone}
-          onClose={() => setProfilePhone(null)}
-          onUpdated={load}
-        />
+        <Suspense fallback={null}>
+          <CustomerProfileDialog
+            phone={profilePhone}
+            open={!!profilePhone}
+            onClose={() => setProfilePhone(null)}
+            onUpdated={load}
+          />
+        </Suspense>
       )}
 
       <Dialog open={bulkSmsOpen} onOpenChange={setBulkSmsOpen}>
@@ -1866,7 +1892,8 @@ function OrdersPage() {
       </Dialog>
 
       {blockingPhone && (
-        <BlockCustomerDialog
+        <Suspense fallback={null}>
+          <BlockCustomerDialog
           open={!!blockingPhone}
           onOpenChange={(v) => { if (!v) setBlockingPhone(null); }}
           defaultPhone={blockingPhone}
@@ -1877,7 +1904,8 @@ function OrdersPage() {
               setBlockedPhones(map);
             } catch { /* non-fatal */ }
           }}
-        />
+          />
+        </Suspense>
       )}
 
       <Dialog open={bulkBlockOpen} onOpenChange={(v) => { if (!bulkBlockBusy) setBulkBlockOpen(v); }}>
