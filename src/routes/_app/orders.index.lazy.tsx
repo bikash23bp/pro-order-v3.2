@@ -563,7 +563,6 @@ function OrdersPage() {
     setStatusFilter(status);
     setHasManualStatusSelection(true);
     setTabsOpen(false);
-    queryClient.setQueryData(orderListQueryKeyFor(status), queryClient.getQueryData(orderListQueryKeyFor(status)));
     navigate({ to: "/orders", search: (prev: { status?: string; page?: number; limit?: number }) => ({ ...prev, status, page: 1 }) });
     prefetchOrderTab(status);
   };
