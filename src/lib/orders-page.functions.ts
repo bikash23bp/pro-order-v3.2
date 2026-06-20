@@ -22,6 +22,7 @@ const OrdersInput = z.object({
 type CountBucket = { count: number; amount: number };
 
 const ORDER_LIST_SELECT = "id, order_number, invoice_number, customer_name, customer_phone, customer_email, customer_address, status, total_amount, delivery_charge, discount_amount, advance_amount, advance_source_id, advance_txn_id, subtotal, created_at, consignment_id, tracking_url, invoice_note, internal_note, courier_id, order_source_id, source, preorder, preorder_date, customer_type, created_by, updated_by, oms_sender_name, oms_sender_order_no, source_site_id, is_paid_marketing, order_sources(name), order_items(quantity, unit_price, products(name), product_variants(attributes))";
+const ORDER_LIST_COUNT_MODE: "planned" = "planned";
 
 const ACTIVE_ORDER_STATUSES = new Set([
   "pending_web",
@@ -191,6 +192,41 @@ function applyFilters(qb: any, data: z.infer<typeof OrdersInput>) {
   if (data.status === "ready_order") return qb.eq("status", "ready_order");
 
   return qb.eq("status", data.status);
+}
+
+async function enrichOrdersForList(context: any, orders: any[]) {
+  const userIds = Array.from(new Set([
+    ...orders.map((o: any) => o.created_by).filter(Boolean),
+    ...orders.map((o: any) => o.updated_by).filter(Boolean),
+  ]));
+  const siteIds = Array.from(new Set(orders.map((o: any) => o.source_site_id).filter(Boolean))) as string[];
+
+  const [profileRes, siteRes, flagMap] = await Promise.all([
+    userIds.length
+      ? context.supabase.from("profiles").select("id, full_name, email").in("id", userIds)
+      : Promise.resolve({ data: [] }),
+    siteIds.length
+      ? context.supabase.from("integrations").select("id, name, site_url").in("id", siteIds)
+      : Promise.resolve({ data: [] }),
+    getVisibleOrderFlags(context.supabase, orders),
+  ]);
+
+  const profileMap = Object.fromEntries((profileRes.data ?? []).map((p: any) => [
+    p.id,
+    { full_name: p.full_name, email: p.email },
+  ]));
+  const siteMap = Object.fromEntries((siteRes.data ?? []).map((s: any) => [
+    s.id,
+    s.name || (s.site_url ? String(s.site_url).replace(/^https?:\/\//, "").replace(/\/+$/, "") : null),
+  ]));
+
+  return orders.map((o: any) => ({
+    ...o,
+    creator: o.created_by ? (profileMap[o.created_by] ?? null) : null,
+    editor: o.updated_by ? (profileMap[o.updated_by] ?? null) : null,
+    site_name: o.source_site_id ? (siteMap[o.source_site_id] ?? null) : null,
+    customer_flags: flagMap[o.id] ?? { is_vip: false, is_repeat: false, is_duplicate: false, returned_count: 0 },
+  }));
 }
 
 async function getVisibleOrderFlags(supabase: any, orders: any[]) {
