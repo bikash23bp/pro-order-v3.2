@@ -746,6 +746,15 @@ function OrdersPage() {
     return out;
   }, [tabCountsData]);
 
+  useEffect(() => {
+    if (!session || !tabCountsData) return;
+    const warmTabs = TAB_STATUSES
+      .filter((tab) => tab.key !== effectiveStatusFilter && (tabCounts[tab.key] ?? 0) > 0)
+      .slice(0, 8);
+    const timers = warmTabs.map((tab, index) => window.setTimeout(() => prefetchOrderTab(tab.key), 250 + index * 350));
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [session, tabCountsData, tabCounts, effectiveStatusFilter]);
+
   const fmtAmount = (n: number) => {
     if (n >= 100000) return `${(n / 1000).toFixed(0)}k`;
     return Math.round(n).toLocaleString("en-IN");
