@@ -1135,7 +1135,11 @@ function OrdersPage() {
           </Button>
         </div>
       </div>
-      <ImportOrdersDialog open={importOpen} onOpenChange={setImportOpen} onDone={() => load(true)} />
+      {importOpen && (
+        <Suspense fallback={null}>
+          <ImportOrdersDialog open={importOpen} onOpenChange={setImportOpen} onDone={() => load(true)} />
+        </Suspense>
+      )}
 
       <Card>
         <CardHeader className="px-2 pb-3 space-y-3 sm:px-6">
@@ -1723,7 +1727,9 @@ function OrdersPage() {
         </CardContent>
       </Card>
 
-      {viewing && <OrderDetailDialog order={viewing} onClose={() => setViewing(null)} onEdit={() => setEditing({
+      {viewing && (
+        <Suspense fallback={null}>
+          <OrderDetailDialog order={viewing} onClose={() => setViewing(null)} onEdit={() => setEditing({
         id: viewing.id,
         order_number: viewing.order_number,
         customer_name: viewing.customer_name,
@@ -1737,8 +1743,14 @@ function OrdersPage() {
         invoice_note: viewing.invoice_note,
         internal_note: viewing.internal_note,
         status: viewing.status,
-      })} />}
-      {editing && <EditOrderDialog order={editing} onClose={() => setEditing(null)} onSaved={load} />}
+          })} />
+        </Suspense>
+      )}
+      {editing && (
+        <Suspense fallback={null}>
+          <EditOrderDialog order={editing} onClose={() => setEditing(null)} onSaved={load} />
+        </Suspense>
+      )}
       {profilePhone && (
         <CustomerProfileDialog
           phone={profilePhone}
