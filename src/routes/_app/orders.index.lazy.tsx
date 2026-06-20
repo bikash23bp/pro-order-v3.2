@@ -678,7 +678,7 @@ function OrdersPage() {
     setSelected(new Set());
   }, [statusFilter, page, sourceFilter, siteFilter, courierFilter, datePreset, debouncedQ, tagFilter, advanceOnly]);
 
-  // Realtime — debounced 3s; just invalidate caches.
+  // Realtime — keep high-volume order imports from causing constant refetch loops.
   useEffect(() => {
     if (!session) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -694,7 +694,7 @@ function OrdersPage() {
           );
         }
         if (timer) clearTimeout(timer);
-        timer = setTimeout(() => { void refetchAll(); }, 5000);
+        timer = setTimeout(() => { void refetchAll(); }, 20000);
       })
       .subscribe();
     return () => {
@@ -762,8 +762,8 @@ function OrdersPage() {
     if (!session || !tabCountsData) return;
     const warmTabs = TAB_STATUSES
       .filter((tab) => tab.key !== effectiveStatusFilter && (tabCounts[tab.key] ?? 0) > 0)
-      .slice(0, 8);
-    const timers = warmTabs.map((tab, index) => window.setTimeout(() => prefetchOrderTab(tab.key), 250 + index * 350));
+      .slice(0, 3);
+    const timers = warmTabs.map((tab, index) => window.setTimeout(() => prefetchOrderTab(tab.key), 900 + index * 700));
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [session, tabCountsData, tabCounts, effectiveStatusFilter]);
 
