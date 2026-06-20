@@ -359,7 +359,7 @@ export const getOrderCountsPage = createServerFn({ method: "POST" })
     const { data: tabCountsData, error } = await (context.supabase as any).rpc("get_order_tab_counts_v2", countArgs);
     if (error) throw new Error(error.message);
     const today = new Date().toISOString().slice(0, 10);
-    const { count } = await context.supabase.from("orders").select("id", { count: "exact", head: true }).eq("preorder", true).not("preorder_date", "is", null).lte("preorder_date", today);
+    const { count } = await context.supabase.from("orders").select("id", { count: "planned", head: true }).eq("preorder", true).not("preorder_date", "is", null).lte("preorder_date", today);
     const normalized = tabCountsData && typeof tabCountsData === "object"
       ? {
           ...(tabCountsData as Record<string, unknown>),
