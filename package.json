@@ -12,7 +12,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "start": "next start"
+    "start": "vite preview"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",
