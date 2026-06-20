@@ -513,8 +513,8 @@ function OrdersPage() {
     queryKey: ordersQueryKey,
     enabled: !!session,
     placeholderData: (previousData) => previousData,
-    staleTime: 30_000,
-    gcTime: 5 * 60_000,
+    staleTime: 2 * 60_000,
+    gcTime: 15 * 60_000,
     refetchOnWindowFocus: false,
     queryFn: async () => {
       return await listOrders({ data: {
@@ -529,6 +529,44 @@ function OrdersPage() {
       } });
     },
   });
+
+  const orderListPayload = (status: string, nextPage = 1) => ({
+    status, page: nextPage, limit,
+    source: sourceFilter, site: siteFilter, courier: courierFilter,
+    partner: partnerFilter, staff: staffFilter,
+    from: datePreset === "all" ? null : fromIso,
+    to: datePreset === "all" ? null : toIso,
+    q: debouncedQ,
+    tagPhones: tagPhoneFilter,
+    advanceOnly,
+  });
+
+  const orderListQueryKeyFor = (status: string, nextPage = 1) => [
+    "orders", "list",
+    { status, page: nextPage, limit, source: sourceFilter, site: siteFilter, courier: courierFilter,
+      partner: partnerFilter, staff: staffFilter,
+      preset: datePreset, from: fromIso, to: toIso, q: debouncedQ, tagPhones: tagPhoneFilter,
+      advanceOnly },
+  ];
+
+  const prefetchOrderTab = (status: string) => {
+    if (!session) return;
+    void queryClient.prefetchQuery({
+      queryKey: orderListQueryKeyFor(status),
+      queryFn: () => listOrders({ data: orderListPayload(status) }),
+      staleTime: 2 * 60_000,
+      gcTime: 15 * 60_000,
+    });
+  };
+
+  const selectOrderTab = (status: string) => {
+    setStatusFilter(status);
+    setHasManualStatusSelection(true);
+    setTabsOpen(false);
+    queryClient.setQueryData(orderListQueryKeyFor(status), queryClient.getQueryData(orderListQueryKeyFor(status)));
+    navigate({ to: "/orders", search: (prev: { status?: string; page?: number; limit?: number }) => ({ ...prev, status, page: 1 }) });
+    prefetchOrderTab(status);
+  };
 
   const rows: Order[] = ordersQuery.data?.rows ?? [];
   const totalCount = ordersQuery.data?.totalCount ?? 0;
