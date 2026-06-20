@@ -3229,6 +3229,10 @@ export type Database = {
         Args: { p_from: string; p_to: string }
         Returns: Json
       }
+      get_order_customer_flags_v1: {
+        Args: { p_emails?: string[]; p_phones?: string[] }
+        Returns: Json
+      }
       get_order_tab_counts:
         | {
             Args: {

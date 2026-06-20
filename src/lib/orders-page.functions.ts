@@ -234,62 +234,29 @@ async function getVisibleOrderFlags(supabase: any, orders: any[]) {
   const emails = Array.from(new Set(orders.map((o) => String(o.customer_email ?? "").trim().toLowerCase()).filter(Boolean)));
   if (!norms.length && !emails.length) return {} as Record<string, { is_vip: boolean; is_repeat: boolean; is_duplicate: boolean; returned_count: number }>;
 
-  const [{ data: settings }, historyRes, importedRes, memberRes, emailDupRes] = await Promise.all([
-    supabase.from("app_settings").select("vip_spend_threshold, vip_order_threshold").eq("id", true).maybeSingle(),
-    norms.length
-      ? supabase.from("orders").select("phone_normalized, customer_phone, customer_email, status, total_amount").in("phone_normalized", norms)
-      : Promise.resolve({ data: [] }),
-    norms.length
-      ? supabase.from("imported_customers").select("phone").in("phone", norms)
-      : Promise.resolve({ data: [] }),
-    norms.length
-      ? supabase.from("membership_customers").select("phone").in("phone", norms)
-      : Promise.resolve({ data: [] }),
-    emails.length
-      ? supabase.from("orders").select("customer_email, status").in("customer_email", emails)
-      : Promise.resolve({ data: [] }),
-  ]);
+  const { data, error } = await supabase.rpc("get_order_customer_flags_v1", {
+    p_phones: norms,
+    p_emails: emails,
+  });
+  if (error) throw new Error(error.message);
 
-  const vipSpend = Number(settings?.vip_spend_threshold ?? 10000);
-  const vipOrders = Number(settings?.vip_order_threshold ?? 5);
-  const byNorm = new Map<string, { total: number; completed: number; spent: number; returned: number; active: number }>();
-  const byKey = new Map<string, number>();
-  const byEmail = new Map<string, number>();
-
-  for (const r of (historyRes.data ?? []) as any[]) {
-    const norm = r.phone_normalized || normalizePhoneForFlags(r.customer_phone ?? "");
-    if (!norm) continue;
-    const cur = byNorm.get(norm) ?? { total: 0, completed: 0, spent: 0, returned: 0, active: 0 };
-    cur.total += 1;
-    if (r.status === "completed") cur.completed += 1;
-    if (r.status !== "cancelled" && r.status !== "returned") cur.spent += Number(r.total_amount ?? 0) || 0;
-    if (r.status === "returned") cur.returned += 1;
-    if (ACTIVE_ORDER_STATUSES.has(String(r.status))) cur.active += 1;
-    byNorm.set(norm, cur);
-    const key = phoneKey8(r.customer_phone ?? norm);
-    if (key && ACTIVE_ORDER_STATUSES.has(String(r.status))) byKey.set(key, (byKey.get(key) ?? 0) + 1);
-  }
-  for (const r of (emailDupRes.data ?? []) as any[]) {
-    const email = String(r.customer_email ?? "").trim().toLowerCase();
-    if (email && ACTIVE_ORDER_STATUSES.has(String(r.status))) byEmail.set(email, (byEmail.get(email) ?? 0) + 1);
-  }
-
-  const repeatNorms = new Set<string>();
-  for (const r of [...(importedRes.data ?? []), ...(memberRes.data ?? [])] as any[]) {
-    const norm = normalizePhoneForFlags(r.phone ?? "");
-    if (norm) repeatNorms.add(norm);
-  }
+  const payload = (data ?? {}) as {
+    phones?: Record<string, { total?: number; returned?: number; active?: number; imported?: boolean; member?: boolean; vip?: boolean }>;
+    emails?: Record<string, { active?: number }>;
+  };
+  const phoneStats = payload.phones ?? {};
+  const emailStats = payload.emails ?? {};
 
   return Object.fromEntries(orders.map((o) => {
     const norm = normalizePhoneForFlags(o.customer_phone ?? "");
-    const key = phoneKey8(o.customer_phone ?? "");
     const email = String(o.customer_email ?? "").trim().toLowerCase();
-    const stat = norm ? byNorm.get(norm) : undefined;
+    const stat = norm ? phoneStats[norm] : undefined;
+    const emailActive = email ? Number(emailStats[email]?.active ?? 0) : 0;
     return [o.id, {
-      is_vip: !!stat && (stat.completed >= vipOrders || stat.spent >= vipSpend),
-      is_repeat: !!norm && ((stat?.total ?? 0) >= 2 || repeatNorms.has(norm)),
-      is_duplicate: ACTIVE_ORDER_STATUSES.has(String(o.status)) && ((!!key && (byKey.get(key) ?? 0) >= 2) || (!!email && (byEmail.get(email) ?? 0) >= 2)),
-      returned_count: stat?.returned ?? 0,
+      is_vip: Boolean(stat?.vip),
+      is_repeat: !!norm && (Number(stat?.total ?? 0) >= 2 || Boolean(stat?.imported) || Boolean(stat?.member)),
+      is_duplicate: ACTIVE_ORDER_STATUSES.has(String(o.status)) && (Number(stat?.active ?? 0) >= 2 || emailActive >= 2),
+      returned_count: Number(stat?.returned ?? 0),
     }];
   })) as Record<string, { is_vip: boolean; is_repeat: boolean; is_duplicate: boolean; returned_count: number }>;
 }
@@ -311,29 +278,19 @@ export const listOrdersPage = createServerFn({ method: "POST" })
         .order("created_at", { ascending: false })
         .range(offset, offset + data.limit - 1);
       if (isRangeNotSatisfiable(error)) {
-        let cq: any = context.supabase.from("orders").select("id", { count: "exact", head: true }).eq("status", "incomplete");
-        cq = applyCommonFilters(cq, data);
-        cq = applyOmsAccessFilter(cq, omsAllowed);
-        const { count: c2, error: countError } = await cq;
-        if (countError) throw new Error(countError.message);
-        count = c2 ?? 0;
-        const fallbackPage = Math.max(1, Math.ceil((count || 0) / data.limit));
-        if ((count || 0) > 0) {
-          let fallbackQb: any = context.supabase
-            .from("orders")
-            .select(ORDER_LIST_SELECT, { count: ORDER_LIST_COUNT_MODE })
-            .eq("status", "incomplete");
-          fallbackQb = applyCommonFilters(fallbackQb, data);
-          fallbackQb = applyOmsAccessFilter(fallbackQb, omsAllowed);
-          const fallbackOffset = (fallbackPage - 1) * data.limit;
-          const { data: fallbackRows, error: fallbackError } = await fallbackQb
-            .order("created_at", { ascending: false })
-            .range(fallbackOffset, fallbackOffset + data.limit - 1);
-          if (fallbackError) throw new Error(fallbackError.message);
-          rows = fallbackRows ?? [];
-        } else {
-          rows = [];
-        }
+        let fallbackQb: any = context.supabase
+          .from("orders")
+          .select(ORDER_LIST_SELECT, { count: ORDER_LIST_COUNT_MODE })
+          .eq("status", "incomplete");
+        fallbackQb = applyCommonFilters(fallbackQb, data);
+        fallbackQb = applyOmsAccessFilter(fallbackQb, omsAllowed);
+        const { data: fallbackRows, error: fallbackError, count: fallbackCount } = await fallbackQb
+          .order("created_at", { ascending: false })
+          .range(0, data.limit - 1);
+        if (fallbackError) throw new Error(fallbackError.message);
+        rows = fallbackRows ?? [];
+        count = fallbackCount ?? rows.length;
+        data.page = 1;
         error = null as any;
       }
       if (error) throw new Error(error.message);
@@ -355,28 +312,18 @@ export const listOrdersPage = createServerFn({ method: "POST" })
     qb = applyOmsAccessFilter(qb, omsAllowed);
     let { data: rows, error, count } = await qb.order("created_at", { ascending: false }).range(offset, offset + data.limit - 1);
     if (isRangeNotSatisfiable(error)) {
-      let cq: any = context.supabase.from("orders").select("id", { count: "exact", head: true });
-      cq = applyFilters(cq, data);
-      cq = applyOmsAccessFilter(cq, omsAllowed);
-      const { count: c2, error: countError } = await cq;
-      if (countError) throw new Error(countError.message);
-      count = c2 ?? 0;
-      const fallbackPage = Math.max(1, Math.ceil((count || 0) / data.limit));
-      if ((count || 0) > 0) {
-        let fallbackQb: any = context.supabase
-          .from("orders")
-          .select(ORDER_LIST_SELECT, { count: ORDER_LIST_COUNT_MODE });
-        fallbackQb = applyFilters(fallbackQb, data);
-        fallbackQb = applyOmsAccessFilter(fallbackQb, omsAllowed);
-        const fallbackOffset = (fallbackPage - 1) * data.limit;
-        const { data: fallbackRows, error: fallbackError } = await fallbackQb
-          .order("created_at", { ascending: false })
-          .range(fallbackOffset, fallbackOffset + data.limit - 1);
-        if (fallbackError) throw new Error(fallbackError.message);
-        rows = fallbackRows ?? [];
-      } else {
-        rows = [];
-      }
+      let fallbackQb: any = context.supabase
+        .from("orders")
+        .select(ORDER_LIST_SELECT, { count: ORDER_LIST_COUNT_MODE });
+      fallbackQb = applyFilters(fallbackQb, data);
+      fallbackQb = applyOmsAccessFilter(fallbackQb, omsAllowed);
+      const { data: fallbackRows, error: fallbackError, count: fallbackCount } = await fallbackQb
+        .order("created_at", { ascending: false })
+        .range(0, data.limit - 1);
+      if (fallbackError) throw new Error(fallbackError.message);
+      rows = fallbackRows ?? [];
+      count = fallbackCount ?? rows.length;
+      data.page = 1;
       error = null as any;
     }
     if (error) throw new Error(error.message);
@@ -412,7 +359,7 @@ export const getOrderCountsPage = createServerFn({ method: "POST" })
     const { data: tabCountsData, error } = await (context.supabase as any).rpc("get_order_tab_counts_v2", countArgs);
     if (error) throw new Error(error.message);
     const today = new Date().toISOString().slice(0, 10);
-    const { count } = await context.supabase.from("orders").select("id", { count: "exact", head: true }).eq("preorder", true).not("preorder_date", "is", null).lte("preorder_date", today);
+    const { count } = await context.supabase.from("orders").select("id", { count: "planned", head: true }).eq("preorder", true).not("preorder_date", "is", null).lte("preorder_date", today);
     const normalized = tabCountsData && typeof tabCountsData === "object"
       ? {
           ...(tabCountsData as Record<string, unknown>),
