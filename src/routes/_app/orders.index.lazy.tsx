@@ -1752,12 +1752,14 @@ function OrdersPage() {
         </Suspense>
       )}
       {profilePhone && (
-        <CustomerProfileDialog
-          phone={profilePhone}
-          open={!!profilePhone}
-          onClose={() => setProfilePhone(null)}
-          onUpdated={load}
-        />
+        <Suspense fallback={null}>
+          <CustomerProfileDialog
+            phone={profilePhone}
+            open={!!profilePhone}
+            onClose={() => setProfilePhone(null)}
+            onUpdated={load}
+          />
+        </Suspense>
       )}
 
       <Dialog open={bulkSmsOpen} onOpenChange={setBulkSmsOpen}>
@@ -1890,7 +1892,8 @@ function OrdersPage() {
       </Dialog>
 
       {blockingPhone && (
-        <BlockCustomerDialog
+        <Suspense fallback={null}>
+          <BlockCustomerDialog
           open={!!blockingPhone}
           onOpenChange={(v) => { if (!v) setBlockingPhone(null); }}
           defaultPhone={blockingPhone}
@@ -1901,7 +1904,8 @@ function OrdersPage() {
               setBlockedPhones(map);
             } catch { /* non-fatal */ }
           }}
-        />
+          />
+        </Suspense>
       )}
 
       <Dialog open={bulkBlockOpen} onOpenChange={(v) => { if (!bulkBlockBusy) setBulkBlockOpen(v); }}>
