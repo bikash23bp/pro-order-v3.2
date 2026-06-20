@@ -1,0 +1,1 @@
+ALTER TABLE public.user_permissions ADD COLUMN IF NOT EXISTS can_manage_passwords boolean NOT NULL DEFAULT false;

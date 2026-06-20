@@ -1,0 +1,1 @@
+ALTER TABLE public.couriers ADD COLUMN IF NOT EXISTS invoice_template_id text;

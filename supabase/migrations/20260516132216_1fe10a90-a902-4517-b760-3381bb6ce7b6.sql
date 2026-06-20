@@ -1,0 +1,1 @@
+ALTER TABLE public.telesales_call_logs ADD COLUMN IF NOT EXISTS reassigned_to uuid;

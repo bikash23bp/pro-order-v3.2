@@ -1,0 +1,1 @@
+ALTER TABLE public.oms_destinations ADD COLUMN IF NOT EXISTS products_url text;

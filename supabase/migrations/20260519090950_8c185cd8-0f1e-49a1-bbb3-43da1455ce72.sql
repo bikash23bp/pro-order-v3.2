@@ -1,0 +1,1 @@
+ALTER TABLE public.app_settings ADD COLUMN IF NOT EXISTS report_courier_charge numeric NOT NULL DEFAULT 0;

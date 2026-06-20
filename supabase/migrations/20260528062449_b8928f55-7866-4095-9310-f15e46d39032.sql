@@ -1,0 +1,1 @@
+SELECT setval('public.orders_order_number_seq', GREATEST((SELECT COALESCE(MAX(order_number),1) FROM public.orders), 1));

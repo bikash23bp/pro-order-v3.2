@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX IF NOT EXISTS blocked_customers_phone_normalized_key ON public.blocked_customers (phone_normalized) WHERE phone_normalized IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS blocked_customers_ip_address_key ON public.blocked_customers (ip_address) WHERE ip_address IS NOT NULL;
