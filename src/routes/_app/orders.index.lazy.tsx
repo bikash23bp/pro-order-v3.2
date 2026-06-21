@@ -565,7 +565,7 @@ function OrdersPage() {
   ];
 
   const prefetchOrderTab = (status: string) => {
-    if (!session) return;
+    if (!session || status === effectiveStatusFilter) return;
     void queryClient.prefetchQuery({
       queryKey: orderListQueryKeyFor(status),
       queryFn: () => listOrders({ data: orderListPayload(status) }),
@@ -579,7 +579,6 @@ function OrdersPage() {
     setHasManualStatusSelection(true);
     setTabsOpen(false);
     navigate({ to: "/orders", search: (prev: { status?: string; page?: number; limit?: number }) => ({ ...prev, status, page: 1 }) });
-    prefetchOrderTab(status);
   };
 
   const rows: Order[] = ordersQuery.data?.rows ?? [];
@@ -760,15 +759,6 @@ function OrdersPage() {
     }
     return out;
   }, [tabCountsData]);
-
-  useEffect(() => {
-    if (!session || !tabCountsData) return;
-    const warmTabs = TAB_STATUSES
-      .filter((tab) => tab.key !== effectiveStatusFilter && (tabCounts[tab.key] ?? 0) > 0)
-      .slice(0, 3);
-    const timers = warmTabs.map((tab, index) => window.setTimeout(() => prefetchOrderTab(tab.key), 900 + index * 700));
-    return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [session, tabCountsData, tabCounts, effectiveStatusFilter]);
 
   const fmtAmount = (n: number) => {
     if (n >= 100000) return `${(n / 1000).toFixed(0)}k`;
