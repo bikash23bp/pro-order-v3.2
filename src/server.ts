@@ -18,10 +18,21 @@ function hydrateProcessEnv(env: unknown) {
     }
   }
 
+  const personalBackendAliases: Record<string, string> = {
+    SUPABASE_URL: "PERSONAL_SUPABASE_URL",
+    SUPABASE_PUBLISHABLE_KEY: "PERSONAL_SUPABASE_PUBLISHABLE_KEY",
+    SUPABASE_SERVICE_ROLE_KEY: "PERSONAL_SUPABASE_SERVICE_ROLE_KEY",
+  };
+
+  for (const [target, source] of Object.entries(personalBackendAliases)) {
+    const sourceValue = process.env[source] ? normalizeEnvValue(process.env[source]) : "";
+    if (sourceValue) process.env[target] = sourceValue;
+  }
+
   const aliases: Record<string, string[]> = {
-    SUPABASE_URL: ["PERSONAL_SUPABASE_URL", "VITE_SUPABASE_URL"],
-    SUPABASE_PUBLISHABLE_KEY: ["PERSONAL_SUPABASE_PUBLISHABLE_KEY", "VITE_SUPABASE_PUBLISHABLE_KEY", "VITE_SUPABASE_ANON_KEY", "SUPABASE_ANON_KEY"],
-    SUPABASE_SERVICE_ROLE_KEY: ["PERSONAL_SUPABASE_SERVICE_ROLE_KEY", "SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY", "SUPABASE_SECRET_KEY", "VITE_SUPABASE_SERVICE_ROLE_KEY"],
+    SUPABASE_URL: ["VITE_SUPABASE_URL"],
+    SUPABASE_PUBLISHABLE_KEY: ["VITE_SUPABASE_PUBLISHABLE_KEY", "VITE_SUPABASE_ANON_KEY", "SUPABASE_ANON_KEY"],
+    SUPABASE_SERVICE_ROLE_KEY: ["SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY", "SUPABASE_SECRET_KEY", "VITE_SUPABASE_SERVICE_ROLE_KEY"],
   };
 
   for (const [target, sources] of Object.entries(aliases)) {
