@@ -545,35 +545,6 @@ function OrdersPage() {
     },
   });
 
-  const orderListPayload = (status: string, nextPage = 1) => ({
-    status, page: nextPage, limit,
-    source: sourceFilter, site: siteFilter, courier: courierFilter,
-    partner: partnerFilter, staff: staffFilter,
-    from: datePreset === "all" ? null : fromIso,
-    to: datePreset === "all" ? null : toIso,
-    q: debouncedQ,
-    tagPhones: tagPhoneFilter,
-    advanceOnly,
-  });
-
-  const orderListQueryKeyFor = (status: string, nextPage = 1) => [
-    "orders", "list",
-    { status, page: nextPage, limit, source: sourceFilter, site: siteFilter, courier: courierFilter,
-      partner: partnerFilter, staff: staffFilter,
-      preset: datePreset, from: fromIso, to: toIso, q: debouncedQ, tagPhones: tagPhoneFilter,
-      advanceOnly },
-  ];
-
-  const prefetchOrderTab = (status: string) => {
-    if (!session || status === effectiveStatusFilter) return;
-    void queryClient.prefetchQuery({
-      queryKey: orderListQueryKeyFor(status),
-      queryFn: () => listOrders({ data: orderListPayload(status) }),
-      staleTime: ORDER_LIST_STALE_MS,
-      gcTime: ORDER_LIST_GC_MS,
-    });
-  };
-
   const selectOrderTab = (status: string) => {
     setStatusFilter(status);
     setHasManualStatusSelection(true);
