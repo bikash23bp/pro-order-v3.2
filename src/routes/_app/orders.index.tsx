@@ -1,22 +1,39 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
+const defaultOrdersSearch = {
+  status: "processing",
+  page: 1,
+  limit: 10,
+  source: "all",
+  site: "all",
+  courier: "all",
+  partner: "all",
+  staff: "all",
+  q: "",
+  advanceOnly: false,
+  dup: false,
+};
+
 const ordersSearch = z.object({
-  status: fallback(z.string(), "processing").default("processing"),
-  page: fallback(z.number(), 1).default(1),
-  limit: fallback(z.number(), 10).default(10),
-  source: fallback(z.string(), "all").default("all"),
-  site: fallback(z.string(), "all").default("all"),
-  courier: fallback(z.string(), "all").default("all"),
-  partner: fallback(z.string(), "all").default("all"),
-  staff: fallback(z.string(), "all").default("all"),
-  q: fallback(z.string(), "").default(""),
-  advanceOnly: fallback(z.boolean(), false).default(false),
-  dup: fallback(z.boolean(), false).default(false),
+  status: fallback(z.string(), defaultOrdersSearch.status).default(defaultOrdersSearch.status),
+  page: fallback(z.number(), defaultOrdersSearch.page).default(defaultOrdersSearch.page),
+  limit: fallback(z.number(), defaultOrdersSearch.limit).default(defaultOrdersSearch.limit),
+  source: fallback(z.string(), defaultOrdersSearch.source).default(defaultOrdersSearch.source),
+  site: fallback(z.string(), defaultOrdersSearch.site).default(defaultOrdersSearch.site),
+  courier: fallback(z.string(), defaultOrdersSearch.courier).default(defaultOrdersSearch.courier),
+  partner: fallback(z.string(), defaultOrdersSearch.partner).default(defaultOrdersSearch.partner),
+  staff: fallback(z.string(), defaultOrdersSearch.staff).default(defaultOrdersSearch.staff),
+  q: fallback(z.string(), defaultOrdersSearch.q).default(defaultOrdersSearch.q),
+  advanceOnly: fallback(z.boolean(), defaultOrdersSearch.advanceOnly).default(defaultOrdersSearch.advanceOnly),
+  dup: fallback(z.boolean(), defaultOrdersSearch.dup).default(defaultOrdersSearch.dup),
 });
 
 export const Route = createFileRoute("/_app/orders/")({
   head: () => ({ meta: [{ title: "Orders — OMS" }] }),
   validateSearch: zodValidator(ordersSearch),
+  search: {
+    middlewares: [stripSearchParams(defaultOrdersSearch)],
+  },
 });
