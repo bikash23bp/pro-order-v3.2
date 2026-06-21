@@ -555,7 +555,7 @@ function OrdersPage() {
   const rows: Order[] = ordersQuery.data?.rows ?? [];
   const totalCount = ordersQuery.data?.totalCount ?? 0;
   const serverPage = ordersQuery.data?.currentPage ?? page;
-  const loading = ordersQuery.isPending;
+  const loading = ordersQuery.isPending || ordersQuery.isFetching;
 
   useEffect(() => {
     if (!session || loading) return;
@@ -610,7 +610,6 @@ function OrdersPage() {
   const countsQuery = useQuery({
     queryKey: countsQueryKey,
     enabled: !!session,
-    placeholderData: (previousData) => previousData,
     staleTime: 10_000,
     gcTime: 5 * 60_000,
     refetchOnWindowFocus: false,
@@ -667,7 +666,7 @@ function OrdersPage() {
           );
         }
         if (timer) clearTimeout(timer);
-        timer = setTimeout(() => { void refetchAll(); }, 20000);
+        timer = setTimeout(() => { void refetchAll(); }, 1500);
       })
       .subscribe();
     return () => {
