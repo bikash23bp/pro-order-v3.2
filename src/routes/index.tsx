@@ -1,5 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Package, ArrowRight } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -15,11 +14,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Landing() {
-  const { session, loading } = useAuth();
-  const navigate = useNavigate();
-  useEffect(() => {
-    if (!loading && session) navigate({ to: "/dashboard" });
-  }, [loading, session, navigate]);
+  const { session } = useAuth();
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-background via-background to-accent/20">
@@ -30,7 +25,7 @@ function Landing() {
           </div>
           <span className="font-semibold">OMS</span>
         </div>
-        <Button asChild variant="outline" size="sm"><Link to="/auth">Sign in</Link></Button>
+        <Button asChild variant="outline" size="sm"><Link to={session ? "/dashboard" : "/auth"}>{session ? "Dashboard" : "Sign in"}</Link></Button>
       </header>
       <main className="flex-1 grid place-items-center px-6">
         <div className="max-w-2xl text-center space-y-6">
@@ -42,7 +37,7 @@ function Landing() {
             Manage products, orders, inventory, and courier shipments from one beautiful dashboard.
           </p>
           <Button asChild size="lg">
-            <Link to="/auth">Get started <ArrowRight className="h-4 w-4" /></Link>
+            <Link to={session ? "/dashboard" : "/auth"}>Get started <ArrowRight className="h-4 w-4" /></Link>
           </Button>
         </div>
       </main>
