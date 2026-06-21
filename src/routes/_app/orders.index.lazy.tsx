@@ -611,7 +611,7 @@ function OrdersPage() {
     queryKey: countsQueryKey,
     enabled: !!session,
     placeholderData: (previousData) => previousData,
-    staleTime: 30_000,
+    staleTime: 10_000,
     gcTime: 5 * 60_000,
     refetchOnWindowFocus: false,
     queryFn: async () => {
