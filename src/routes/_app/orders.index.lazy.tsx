@@ -196,6 +196,9 @@ const TAB_STATUSES: TabDef[] = [
   ...PIPELINE_TABS,
 ];
 
+const ORDER_LIST_STALE_MS = 10 * 60_000;
+const ORDER_LIST_GC_MS = 30 * 60_000;
+
 // High-contrast pill colors (solid bg + white text) so counts are clearly readable.
 const TAB_COLOR_CLASSES: Record<string, {
   border: string; activeBg: string; activeText: string; pillBg: string; pillText: string; hover: string;
@@ -525,8 +528,8 @@ function OrdersPage() {
     queryKey: ordersQueryKey,
     enabled: !!session,
     placeholderData: (previousData) => previousData,
-    staleTime: 2 * 60_000,
-    gcTime: 15 * 60_000,
+    staleTime: ORDER_LIST_STALE_MS,
+    gcTime: ORDER_LIST_GC_MS,
     refetchOnWindowFocus: false,
     queryFn: async () => {
       return await listOrders({ data: {
@@ -566,8 +569,8 @@ function OrdersPage() {
     void queryClient.prefetchQuery({
       queryKey: orderListQueryKeyFor(status),
       queryFn: () => listOrders({ data: orderListPayload(status) }),
-      staleTime: 2 * 60_000,
-      gcTime: 15 * 60_000,
+      staleTime: ORDER_LIST_STALE_MS,
+      gcTime: ORDER_LIST_GC_MS,
     });
   };
 
