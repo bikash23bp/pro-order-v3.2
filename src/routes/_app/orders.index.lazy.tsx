@@ -196,7 +196,7 @@ const TAB_STATUSES: TabDef[] = [
   ...PIPELINE_TABS,
 ];
 
-const ORDER_LIST_STALE_MS = 10 * 60_000;
+const ORDER_LIST_STALE_MS = 0;
 const ORDER_LIST_GC_MS = 30 * 60_000;
 
 // High-contrast pill colors (solid bg + white text) so counts are clearly readable.
@@ -510,7 +510,7 @@ function OrdersPage() {
     return qb.eq("status", effectiveStatusFilter);
   };
 
-  // ============ Orders list query — useQuery with staleTime 30s ============
+  // ============ Orders list query — always fetch the selected tab ============
   const fromIso = dateRange.from.toISOString();
   const toIso = dateRange.to.toISOString();
   const ordersQueryKey = useMemo(
@@ -527,10 +527,10 @@ function OrdersPage() {
   const ordersQuery = useQuery({
     queryKey: ordersQueryKey,
     enabled: !!session,
-    placeholderData: (previousData) => previousData,
     staleTime: ORDER_LIST_STALE_MS,
     gcTime: ORDER_LIST_GC_MS,
     refetchOnWindowFocus: false,
+    refetchOnMount: "always",
     queryFn: async () => {
       return await listOrders({ data: {
         status: effectiveStatusFilter, page, limit,
@@ -611,7 +611,7 @@ function OrdersPage() {
     queryKey: countsQueryKey,
     enabled: !!session,
     placeholderData: (previousData) => previousData,
-    staleTime: 30_000,
+    staleTime: 10_000,
     gcTime: 5 * 60_000,
     refetchOnWindowFocus: false,
     queryFn: async () => {
