@@ -6,12 +6,27 @@
 // You can pass additional config via defineConfig({ vite: { ... } }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
+function cleanEnv(value: string | undefined) {
+  return value?.trim().replace(/^[ '\"]|[ '\"]$/g, "") ?? "";
+}
+
+const supabaseUrl = cleanEnv(process.env.PERSONAL_SUPABASE_URL) || cleanEnv(process.env.VITE_SUPABASE_URL);
+const supabasePublishableKey = cleanEnv(process.env.PERSONAL_SUPABASE_PUBLISHABLE_KEY) || cleanEnv(process.env.VITE_SUPABASE_PUBLISHABLE_KEY);
+const supabaseProjectId = supabaseUrl ? new URL(supabaseUrl).hostname.split(".")[0] : cleanEnv(process.env.VITE_SUPABASE_PROJECT_ID);
+
 // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
 // @cloudflare/vite-plugin builds from this — wrangler.jsonc main alone is insufficient.
 // Force-enable nitro so Cloudflare Workers Builds (outside Lovable sandbox) also produces
 // dist/server/index.mjs and dist/server/wrangler.json.
 export default defineConfig({
   nitro: true,
+  vite: {
+    define: {
+      "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(supabaseUrl),
+      "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(supabasePublishableKey),
+      "import.meta.env.VITE_SUPABASE_PROJECT_ID": JSON.stringify(supabaseProjectId),
+    },
+  },
   tanstackStart: {
     server: { entry: "server" },
   },
