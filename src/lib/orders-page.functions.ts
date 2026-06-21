@@ -103,15 +103,19 @@ function isRangeNotSatisfiable(error: {
 }
 
 async function getAllowedOmsSenders(ctx: { supabase: any; userId: string }): Promise<string[] | null> {
-  const [a, o] = await Promise.all([
-    ctx.supabase.rpc("has_role", { _user_id: ctx.userId, _role: "admin" }),
-    ctx.supabase.rpc("has_role", { _user_id: ctx.userId, _role: "business_owner" }),
+  const [rolesRes, profileRes, accessRes] = await Promise.all([
+    ctx.supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", ctx.userId)
+      .in("role", ["admin", "business_owner"]),
+    ctx.supabase.from("profiles").select("permissions").eq("id", ctx.userId).maybeSingle(),
+    (ctx.supabase as any).from("user_oms_access").select("sender_name").eq("user_id", ctx.userId),
   ]);
-  if (a.data || o.data) return null;
-  const { data: prof } = await ctx.supabase.from("profiles").select("permissions").eq("id", ctx.userId).maybeSingle();
-  if ((prof?.permissions as any)?.can_view_all_orders) return null;
-  const { data } = await (ctx.supabase as any).from("user_oms_access").select("sender_name").eq("user_id", ctx.userId);
-  return ((data ?? []) as { sender_name: string }[]).map((r) => r.sender_name);
+  const roles = new Set(((rolesRes.data ?? []) as { role: string }[]).map((r) => r.role));
+  if (roles.has("admin") || roles.has("business_owner")) return null;
+  if ((profileRes.data?.permissions as any)?.can_view_all_orders) return null;
+  return ((accessRes.data ?? []) as { sender_name: string }[]).map((r) => r.sender_name);
 }
 
 function applyOmsAccessFilter(qb: any, allowed: string[] | null) {
