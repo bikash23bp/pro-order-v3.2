@@ -33,7 +33,7 @@ export const createStaffUser = createServerFn({ method: "POST" })
     const perms = data.role === "admin" || data.role === "business_owner" ? FULL_PERMISSIONS : data.permissions;
 
     // 1. Already has a profile? Just grant access (and optionally reset password).
-    const { data: existingProfile, error: profileErr } = await context.supabase
+    const { data: existingProfile, error: profileErr } = await supabaseAdmin
       .from("profiles")
       .select("id")
       .ilike("email", email)
@@ -41,7 +41,7 @@ export const createStaffUser = createServerFn({ method: "POST" })
     if (profileErr) throw new Error(profileErr.message);
 
     if (existingProfile?.id) {
-      await grantStaffAccess(context.supabase, existingProfile.id, email, data.fullName, data.role, perms);
+      await grantStaffAccess(supabaseAdmin, existingProfile.id, email, data.fullName, data.role, perms);
       if (data.password) {
         const { error: pwErr } = await supabaseAdmin.auth.admin.updateUserById(existingProfile.id, {
           password: data.password,
@@ -56,7 +56,7 @@ export const createStaffUser = createServerFn({ method: "POST" })
     //    Prefer admin.createUser with email_confirm=true so the new user can
     //    sign in immediately without email verification (works with fake emails too).
     const password = data.password ?? generateTempPassword();
-    await upsertPendingInvite(context.supabase, email, data.fullName, data.role, perms, context.userId);
+    await upsertPendingInvite(supabaseAdmin, email, data.fullName, data.role, perms, context.userId);
 
     const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
       email,
@@ -73,7 +73,7 @@ export const createStaffUser = createServerFn({ method: "POST" })
     const newUserId = created.user.id;
 
     // 3. Ensure role + permissions + profile immediately for the new auth user.
-    await grantStaffAccess(context.supabase, newUserId, email, data.fullName, data.role, perms);
+    await grantStaffAccess(supabaseAdmin, newUserId, email, data.fullName, data.role, perms);
     return {
       id: newUserId,
       email,
@@ -123,11 +123,12 @@ export const listStaffUsers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await ensureAdmin(context);
+    const supabaseAdmin = await getAdminClient();
     const [profilesRes, rolesRes, permsRes, invitesRes] = await Promise.all([
-      context.supabase.from("profiles").select("id, email, full_name, avatar_url, is_blocked, chat_force_popup, created_at"),
-      context.supabase.from("user_roles").select("user_id, role"),
-      context.supabase.from("user_permissions").select("*"),
-      context.supabase.from("pending_user_invites").select("id, email, full_name, role, permissions, created_at").is("used_at", null),
+      supabaseAdmin.from("profiles").select("id, email, full_name, avatar_url, is_blocked, chat_force_popup, created_at"),
+      supabaseAdmin.from("user_roles").select("user_id, role"),
+      supabaseAdmin.from("user_permissions").select("*"),
+      supabaseAdmin.from("pending_user_invites").select("id, email, full_name, role, permissions, created_at").is("used_at", null),
     ]);
     if (profilesRes.error) throw new Error(profilesRes.error.message);
     if (rolesRes.error) throw new Error(rolesRes.error.message);
