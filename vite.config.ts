@@ -6,12 +6,27 @@
 // You can pass additional config via defineConfig({ vite: { ... } }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
+const DEFAULT_LOVABLE_PROJECT_ID = "obxcohpzilphezwawhum";
+
 function cleanEnv(value: string | undefined) {
-  return value?.trim().replace(/^[ '\"]|[ '\"]$/g, "") ?? "";
+  let normalized = value?.trim().replace(/^[ '\"]|[ '\"]$/g, "") ?? "";
+  const assignment = normalized.match(/^[A-Z0-9_]+\s*=\s*(.+)$/);
+  if (assignment?.[1]) normalized = assignment[1].trim().replace(/^[ '\"]|[ '\"]$/g, "");
+  return normalized;
 }
 
-const supabaseUrl = cleanEnv(process.env.PERSONAL_SUPABASE_URL) || cleanEnv(process.env.VITE_SUPABASE_URL);
-const supabasePublishableKey = cleanEnv(process.env.PERSONAL_SUPABASE_PUBLISHABLE_KEY) || cleanEnv(process.env.VITE_SUPABASE_PUBLISHABLE_KEY);
+function isDefaultLovableBackend(url: string) {
+  try {
+    return new URL(url).hostname.split(".")[0] === DEFAULT_LOVABLE_PROJECT_ID;
+  } catch {
+    return false;
+  }
+}
+
+const fallbackSupabaseUrl = cleanEnv(process.env.SUPABASE_URL) || cleanEnv(process.env.VITE_SUPABASE_URL);
+const fallbackSupabasePublishableKey = cleanEnv(process.env.SUPABASE_PUBLISHABLE_KEY) || cleanEnv(process.env.VITE_SUPABASE_PUBLISHABLE_KEY);
+const supabaseUrl = cleanEnv(process.env.PERSONAL_SUPABASE_URL) || (isDefaultLovableBackend(fallbackSupabaseUrl) ? "" : fallbackSupabaseUrl);
+const supabasePublishableKey = cleanEnv(process.env.PERSONAL_SUPABASE_PUBLISHABLE_KEY) || (isDefaultLovableBackend(fallbackSupabaseUrl) ? "" : fallbackSupabasePublishableKey);
 const supabaseProjectId = supabaseUrl ? new URL(supabaseUrl).hostname.split(".")[0] : cleanEnv(process.env.VITE_SUPABASE_PROJECT_ID);
 
 // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
