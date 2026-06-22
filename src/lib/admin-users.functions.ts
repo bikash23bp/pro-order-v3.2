@@ -374,16 +374,17 @@ export const updateStaffUser = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await ensureAdmin(context);
-    await assertNotMainAdmin(context.supabase, data.userId);
+    const supabaseAdmin = await getAdminClient();
+    await assertNotMainAdmin(supabaseAdmin, data.userId);
 
-    const { data: current } = await context.supabase
+    const { data: current } = await supabaseAdmin
       .from("profiles")
       .select("email")
       .eq("id", data.userId)
       .maybeSingle();
 
     if (!current) {
-      const { data: invite, error: inviteErr } = await context.supabase
+      const { data: invite, error: inviteErr } = await supabaseAdmin
         .from("pending_user_invites")
         .update({ full_name: data.fullName, email: data.email })
         .eq("id", data.userId)
@@ -395,7 +396,7 @@ export const updateStaffUser = createServerFn({ method: "POST" })
       return { ok: true };
     }
 
-    const { error } = await context.supabase
+    const { error } = await supabaseAdmin
       .from("profiles")
       .update({ full_name: data.fullName, email: data.email })
       .eq("id", data.userId);
@@ -414,12 +415,13 @@ export const setUserBlocked = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await ensureAdmin(context);
-    await assertNotMainAdmin(context.supabase, data.userId);
+    const supabaseAdmin = await getAdminClient();
+    await assertNotMainAdmin(supabaseAdmin, data.userId);
     if (data.userId === context.userId) {
       throw new Error("You cannot block your own account");
     }
 
-    const { error } = await context.supabase
+    const { error } = await supabaseAdmin
       .from("profiles")
       .update({ is_blocked: data.blocked })
       .eq("id", data.userId);
