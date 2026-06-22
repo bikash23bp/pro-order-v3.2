@@ -27,6 +27,7 @@ export const createStaffUser = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => Input.parse(input))
   .handler(async ({ data, context }) => {
     await ensureAdmin(context);
+    const supabaseAdmin = await getAdminClient();
 
     const email = data.email.toLowerCase();
     const perms = data.role === "admin" || data.role === "business_owner" ? FULL_PERMISSIONS : data.permissions;
@@ -279,6 +280,7 @@ export const uploadStaffAvatar = createServerFn({ method: "POST" })
   })
   .handler(async ({ data, context }) => {
     await ensureAdmin(context);
+    const supabaseAdmin = await getAdminClient();
     const userId = String(data.get("userId") ?? "");
     if (!z.string().uuid().safeParse(userId).success) throw new Error("Invalid user id");
     await assertNotMainAdmin(context.supabase, userId);
@@ -526,6 +528,7 @@ export const deleteStaffUser = createServerFn({ method: "POST" })
   });
 
 async function ensurePasswordManager(ctx: { supabase: any; userId: string }) {
+  const supabaseAdmin = await getAdminClient();
   // Main admin always allowed
   const { data: meProfile } = await supabaseAdmin
     .from("profiles")
@@ -565,6 +568,7 @@ export const setUserPassword = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await ensurePasswordManager(context);
+    const supabaseAdmin = await getAdminClient();
     // Even password managers cannot touch the main admin
     await assertNotMainAdmin(context.supabase, data.userId);
 
