@@ -183,7 +183,7 @@ export const updateStaffRole = createServerFn({ method: "POST" })
     if (profileErr) throw new Error(profileErr.message);
 
     if (!profile) {
-      const { data: invite, error: inviteErr } = await context.supabase
+      const { data: invite, error: inviteErr } = await supabaseAdmin
         .from("pending_user_invites")
         .update({ role: data.role })
         .eq("id", data.userId)
@@ -231,7 +231,7 @@ export const updateStaffPermissions = createServerFn({ method: "POST" })
         permissions: data.permissions,
         ...(data.role ? { role: data.role } : {}),
       };
-      const { data: invite, error: inviteErr } = await context.supabase
+      const { data: invite, error: inviteErr } = await supabaseAdmin
         .from("pending_user_invites")
         .update(inviteUpdate)
         .eq("id", data.userId)
@@ -249,7 +249,7 @@ export const updateStaffPermissions = createServerFn({ method: "POST" })
     let appliedRole: z.infer<typeof RoleEnum> | null = requestedRole;
 
     if (!appliedRole) {
-      const { data: currentRole, error: roleLookupErr } = await context.supabase
+      const { data: currentRole, error: roleLookupErr } = await supabaseAdmin
         .from("user_roles")
         .select("role")
         .eq("user_id", data.userId)
@@ -267,7 +267,7 @@ export const updateStaffPermissions = createServerFn({ method: "POST" })
       if (roleInsErr) throw new Error(roleInsErr.message);
     }
 
-    const { error } = await context.supabase
+    const { error } = await supabaseAdmin
       .from("user_permissions")
       .upsert({ user_id: data.userId, ...data.permissions } as never, { onConflict: "user_id" });
     if (error) throw new Error(error.message);
