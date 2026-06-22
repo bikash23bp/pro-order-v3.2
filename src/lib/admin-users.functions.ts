@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { ALL_PERMISSION_KEYS, FULL_PERMISSIONS } from "@/lib/permissions";
 
 const RoleEnum = z.enum(["business_owner", "admin", "manager", "staff", "user_request"]);
@@ -18,17 +17,23 @@ const Input = z.object({
   password: z.string().min(8).max(128).optional(),
 });
 
+async function getAdminClient() {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  return supabaseAdmin;
+}
+
 export const createStaffUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => Input.parse(input))
   .handler(async ({ data, context }) => {
     await ensureAdmin(context);
+    const supabaseAdmin = await getAdminClient();
 
     const email = data.email.toLowerCase();
     const perms = data.role === "admin" || data.role === "business_owner" ? FULL_PERMISSIONS : data.permissions;
 
     // 1. Already has a profile? Just grant access (and optionally reset password).
-    const { data: existingProfile, error: profileErr } = await context.supabase
+    const { data: existingProfile, error: profileErr } = await supabaseAdmin
       .from("profiles")
       .select("id")
       .ilike("email", email)
@@ -36,7 +41,7 @@ export const createStaffUser = createServerFn({ method: "POST" })
     if (profileErr) throw new Error(profileErr.message);
 
     if (existingProfile?.id) {
-      await grantStaffAccess(context.supabase, existingProfile.id, email, data.fullName, data.role, perms);
+      await grantStaffAccess(supabaseAdmin, existingProfile.id, email, data.fullName, data.role, perms);
       if (data.password) {
         const { error: pwErr } = await supabaseAdmin.auth.admin.updateUserById(existingProfile.id, {
           password: data.password,
@@ -51,7 +56,7 @@ export const createStaffUser = createServerFn({ method: "POST" })
     //    Prefer admin.createUser with email_confirm=true so the new user can
     //    sign in immediately without email verification (works with fake emails too).
     const password = data.password ?? generateTempPassword();
-    await upsertPendingInvite(context.supabase, email, data.fullName, data.role, perms, context.userId);
+    await upsertPendingInvite(supabaseAdmin, email, data.fullName, data.role, perms, context.userId);
 
     const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
       email,
@@ -68,7 +73,7 @@ export const createStaffUser = createServerFn({ method: "POST" })
     const newUserId = created.user.id;
 
     // 3. Ensure role + permissions + profile immediately for the new auth user.
-    await grantStaffAccess(context.supabase, newUserId, email, data.fullName, data.role, perms);
+    await grantStaffAccess(supabaseAdmin, newUserId, email, data.fullName, data.role, perms);
     return {
       id: newUserId,
       email,
@@ -118,11 +123,12 @@ export const listStaffUsers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await ensureAdmin(context);
+    const supabaseAdmin = await getAdminClient();
     const [profilesRes, rolesRes, permsRes, invitesRes] = await Promise.all([
-      context.supabase.from("profiles").select("id, email, full_name, avatar_url, is_blocked, chat_force_popup, created_at"),
-      context.supabase.from("user_roles").select("user_id, role"),
-      context.supabase.from("user_permissions").select("*"),
-      context.supabase.from("pending_user_invites").select("id, email, full_name, role, permissions, created_at").is("used_at", null),
+      supabaseAdmin.from("profiles").select("id, email, full_name, avatar_url, is_blocked, chat_force_popup, created_at"),
+      supabaseAdmin.from("user_roles").select("user_id, role"),
+      supabaseAdmin.from("user_permissions").select("*"),
+      supabaseAdmin.from("pending_user_invites").select("id, email, full_name, role, permissions, created_at").is("used_at", null),
     ]);
     if (profilesRes.error) throw new Error(profilesRes.error.message);
     if (rolesRes.error) throw new Error(rolesRes.error.message);
@@ -167,8 +173,9 @@ export const updateStaffRole = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await ensureAdmin(context);
+    const supabaseAdmin = await getAdminClient();
 
-    const { data: profile, error: profileErr } = await context.supabase
+    const { data: profile, error: profileErr } = await supabaseAdmin
       .from("profiles")
       .select("id")
       .eq("id", data.userId)
@@ -176,7 +183,7 @@ export const updateStaffRole = createServerFn({ method: "POST" })
     if (profileErr) throw new Error(profileErr.message);
 
     if (!profile) {
-      const { data: invite, error: inviteErr } = await context.supabase
+      const { data: invite, error: inviteErr } = await supabaseAdmin
         .from("pending_user_invites")
         .update({ role: data.role })
         .eq("id", data.userId)
@@ -188,12 +195,12 @@ export const updateStaffRole = createServerFn({ method: "POST" })
       return { ok: true, pending: true };
     }
 
-    await assertNotMainAdmin(context.supabase, data.userId);
+    await assertNotMainAdmin(supabaseAdmin, data.userId);
 
-    const { error: delErr } = await context.supabase.from("user_roles").delete().eq("user_id", data.userId);
+    const { error: delErr } = await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
     if (delErr) throw new Error(delErr.message);
 
-    const { error } = await context.supabase.from("user_roles").insert({ user_id: data.userId, role: data.role });
+    const { error } = await supabaseAdmin.from("user_roles").insert({ user_id: data.userId, role: data.role });
     if (error) throw new Error(error.message);
 
     return { ok: true };
@@ -210,8 +217,9 @@ export const updateStaffPermissions = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await ensureAdmin(context);
+    const supabaseAdmin = await getAdminClient();
 
-    const { data: profile, error: profileErr } = await context.supabase
+    const { data: profile, error: profileErr } = await supabaseAdmin
       .from("profiles")
       .select("id")
       .eq("id", data.userId)
@@ -223,7 +231,7 @@ export const updateStaffPermissions = createServerFn({ method: "POST" })
         permissions: data.permissions,
         ...(data.role ? { role: data.role } : {}),
       };
-      const { data: invite, error: inviteErr } = await context.supabase
+      const { data: invite, error: inviteErr } = await supabaseAdmin
         .from("pending_user_invites")
         .update(inviteUpdate)
         .eq("id", data.userId)
@@ -235,13 +243,13 @@ export const updateStaffPermissions = createServerFn({ method: "POST" })
       return { ok: true, pending: true };
     }
 
-    await assertNotMainAdmin(context.supabase, data.userId);
+    await assertNotMainAdmin(supabaseAdmin, data.userId);
 
     const requestedRole = data.role && data.role !== "user_request" ? data.role : null;
     let appliedRole: z.infer<typeof RoleEnum> | null = requestedRole;
 
     if (!appliedRole) {
-      const { data: currentRole, error: roleLookupErr } = await context.supabase
+      const { data: currentRole, error: roleLookupErr } = await supabaseAdmin
         .from("user_roles")
         .select("role")
         .eq("user_id", data.userId)
@@ -253,13 +261,13 @@ export const updateStaffPermissions = createServerFn({ method: "POST" })
     }
 
     if (appliedRole) {
-      const { error: roleDelErr } = await context.supabase.from("user_roles").delete().eq("user_id", data.userId);
+      const { error: roleDelErr } = await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
       if (roleDelErr) throw new Error(roleDelErr.message);
-      const { error: roleInsErr } = await context.supabase.from("user_roles").insert({ user_id: data.userId, role: appliedRole });
+      const { error: roleInsErr } = await supabaseAdmin.from("user_roles").insert({ user_id: data.userId, role: appliedRole });
       if (roleInsErr) throw new Error(roleInsErr.message);
     }
 
-    const { error } = await context.supabase
+    const { error } = await supabaseAdmin
       .from("user_permissions")
       .upsert({ user_id: data.userId, ...data.permissions } as never, { onConflict: "user_id" });
     if (error) throw new Error(error.message);
@@ -275,9 +283,10 @@ export const uploadStaffAvatar = createServerFn({ method: "POST" })
   })
   .handler(async ({ data, context }) => {
     await ensureAdmin(context);
+    const supabaseAdmin = await getAdminClient();
     const userId = String(data.get("userId") ?? "");
     if (!z.string().uuid().safeParse(userId).success) throw new Error("Invalid user id");
-    await assertNotMainAdmin(context.supabase, userId);
+    await assertNotMainAdmin(supabaseAdmin, userId);
 
     const avatar = data.get("avatar");
     if (!(avatar instanceof File)) throw new Error("Avatar image is required");
@@ -365,16 +374,17 @@ export const updateStaffUser = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await ensureAdmin(context);
-    await assertNotMainAdmin(context.supabase, data.userId);
+    const supabaseAdmin = await getAdminClient();
+    await assertNotMainAdmin(supabaseAdmin, data.userId);
 
-    const { data: current } = await context.supabase
+    const { data: current } = await supabaseAdmin
       .from("profiles")
       .select("email")
       .eq("id", data.userId)
       .maybeSingle();
 
     if (!current) {
-      const { data: invite, error: inviteErr } = await context.supabase
+      const { data: invite, error: inviteErr } = await supabaseAdmin
         .from("pending_user_invites")
         .update({ full_name: data.fullName, email: data.email })
         .eq("id", data.userId)
@@ -386,7 +396,7 @@ export const updateStaffUser = createServerFn({ method: "POST" })
       return { ok: true };
     }
 
-    const { error } = await context.supabase
+    const { error } = await supabaseAdmin
       .from("profiles")
       .update({ full_name: data.fullName, email: data.email })
       .eq("id", data.userId);
@@ -405,12 +415,13 @@ export const setUserBlocked = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await ensureAdmin(context);
-    await assertNotMainAdmin(context.supabase, data.userId);
+    const supabaseAdmin = await getAdminClient();
+    await assertNotMainAdmin(supabaseAdmin, data.userId);
     if (data.userId === context.userId) {
       throw new Error("You cannot block your own account");
     }
 
-    const { error } = await context.supabase
+    const { error } = await supabaseAdmin
       .from("profiles")
       .update({ is_blocked: data.blocked })
       .eq("id", data.userId);
@@ -426,19 +437,20 @@ export const removeStaffUser = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await ensureAdmin(context);
-    await assertNotMainAdmin(context.supabase, data.userId);
+    const supabaseAdmin = await getAdminClient();
+    await assertNotMainAdmin(supabaseAdmin, data.userId);
     if (data.userId === context.userId) {
       throw new Error("You cannot remove your own access");
     }
 
-    const { data: profile, error: lookupErr } = await context.supabase
+    const { data: profile, error: lookupErr } = await supabaseAdmin
       .from("profiles")
       .select("id")
       .eq("id", data.userId)
       .maybeSingle();
     if (lookupErr) throw new Error(lookupErr.message);
     if (!profile) {
-      const { error: inviteErr } = await context.supabase
+      const { error: inviteErr } = await supabaseAdmin
         .from("pending_user_invites")
         .delete()
         .eq("id", data.userId)
@@ -451,20 +463,20 @@ export const removeStaffUser = createServerFn({ method: "POST" })
     const emptyPerms = Object.fromEntries(
       ALL_PERMISSION_KEYS.map((k) => [k, false]),
     );
-    const { error: permErr } = await context.supabase
+    const { error: permErr } = await supabaseAdmin
       .from("user_permissions")
       .upsert({ user_id: data.userId, ...emptyPerms } as never, { onConflict: "user_id" });
     if (permErr) throw new Error(permErr.message);
 
     // Demote to staff
-    const { error: roleDelErr } = await context.supabase.from("user_roles").delete().eq("user_id", data.userId);
+    const { error: roleDelErr } = await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
     if (roleDelErr) throw new Error(roleDelErr.message);
-    const { error: roleInsErr } = await context.supabase
+    const { error: roleInsErr } = await supabaseAdmin
       .from("user_roles")
       .insert({ user_id: data.userId, role: "staff" });
     if (roleInsErr) throw new Error(roleInsErr.message);
 
-    const { error: profileErr } = await context.supabase
+    const { error: profileErr } = await supabaseAdmin
       .from("profiles")
       .update({ is_blocked: true })
       .eq("id", data.userId);
@@ -480,12 +492,13 @@ export const deleteStaffUser = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await ensureAdmin(context);
-    await assertNotMainAdmin(context.supabase, data.userId);
+    const supabaseAdmin = await getAdminClient();
+    await assertNotMainAdmin(supabaseAdmin, data.userId);
     if (data.userId === context.userId) {
       throw new Error("You cannot delete your own account");
     }
 
-    const { data: profile, error: profileLookupErr } = await context.supabase
+    const { data: profile, error: profileLookupErr } = await supabaseAdmin
       .from("profiles")
       .select("email")
       .eq("id", data.userId)
@@ -493,7 +506,7 @@ export const deleteStaffUser = createServerFn({ method: "POST" })
     if (profileLookupErr) throw new Error(profileLookupErr.message);
 
     if (!profile) {
-      const { error: inviteErr } = await context.supabase
+      const { error: inviteErr } = await supabaseAdmin
         .from("pending_user_invites")
         .delete()
         .eq("id", data.userId)
@@ -502,15 +515,15 @@ export const deleteStaffUser = createServerFn({ method: "POST" })
       return { ok: true };
     }
 
-    const { error: permErr } = await context.supabase.from("user_permissions").delete().eq("user_id", data.userId);
+    const { error: permErr } = await supabaseAdmin.from("user_permissions").delete().eq("user_id", data.userId);
     if (permErr) throw new Error(permErr.message);
-    const { error: roleErr } = await context.supabase.from("user_roles").delete().eq("user_id", data.userId);
+    const { error: roleErr } = await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
     if (roleErr) throw new Error(roleErr.message);
-    const { error: profileErr } = await context.supabase.from("profiles").update({ is_blocked: true }).eq("id", data.userId);
+    const { error: profileErr } = await supabaseAdmin.from("profiles").update({ is_blocked: true }).eq("id", data.userId);
     if (profileErr) throw new Error(profileErr.message);
 
     if (profile?.email) {
-      const { error: inviteErr } = await context.supabase
+      const { error: inviteErr } = await supabaseAdmin
         .from("pending_user_invites")
         .delete()
         .eq("email_normalized", profile.email.toLowerCase())
@@ -522,6 +535,7 @@ export const deleteStaffUser = createServerFn({ method: "POST" })
   });
 
 async function ensurePasswordManager(ctx: { supabase: any; userId: string }) {
+  const supabaseAdmin = await getAdminClient();
   // Main admin always allowed
   const { data: meProfile } = await supabaseAdmin
     .from("profiles")
@@ -561,8 +575,9 @@ export const setUserPassword = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await ensurePasswordManager(context);
+    const supabaseAdmin = await getAdminClient();
     // Even password managers cannot touch the main admin
-    await assertNotMainAdmin(context.supabase, data.userId);
+    await assertNotMainAdmin(supabaseAdmin, data.userId);
 
     const { error } = await supabaseAdmin.auth.admin.updateUserById(
       data.userId,
