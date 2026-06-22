@@ -5,6 +5,8 @@ type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
 };
 
+const DEFAULT_LOVABLE_PROJECT_ID = "obxcohpzilphezwawhum";
+
 let serverEntryPromise: Promise<ServerEntry> | undefined;
 
 function hydrateProcessEnv(env: unknown) {
@@ -43,6 +45,12 @@ function hydrateProcessEnv(env: unknown) {
 
   for (const key of ["SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SERVICE_ROLE_KEY"]) {
     if (process.env[key]) process.env[key] = normalizeEnvValue(process.env[key]);
+  }
+
+  if (isDefaultLovableBackend(process.env.SUPABASE_URL)) {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_PUBLISHABLE_KEY;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
   }
 }
 
