@@ -173,8 +173,9 @@ export const updateStaffRole = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await ensureAdmin(context);
+    const supabaseAdmin = await getAdminClient();
 
-    const { data: profile, error: profileErr } = await context.supabase
+    const { data: profile, error: profileErr } = await supabaseAdmin
       .from("profiles")
       .select("id")
       .eq("id", data.userId)
@@ -194,12 +195,12 @@ export const updateStaffRole = createServerFn({ method: "POST" })
       return { ok: true, pending: true };
     }
 
-    await assertNotMainAdmin(context.supabase, data.userId);
+    await assertNotMainAdmin(supabaseAdmin, data.userId);
 
-    const { error: delErr } = await context.supabase.from("user_roles").delete().eq("user_id", data.userId);
+    const { error: delErr } = await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
     if (delErr) throw new Error(delErr.message);
 
-    const { error } = await context.supabase.from("user_roles").insert({ user_id: data.userId, role: data.role });
+    const { error } = await supabaseAdmin.from("user_roles").insert({ user_id: data.userId, role: data.role });
     if (error) throw new Error(error.message);
 
     return { ok: true };
@@ -216,8 +217,9 @@ export const updateStaffPermissions = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await ensureAdmin(context);
+    const supabaseAdmin = await getAdminClient();
 
-    const { data: profile, error: profileErr } = await context.supabase
+    const { data: profile, error: profileErr } = await supabaseAdmin
       .from("profiles")
       .select("id")
       .eq("id", data.userId)
@@ -241,7 +243,7 @@ export const updateStaffPermissions = createServerFn({ method: "POST" })
       return { ok: true, pending: true };
     }
 
-    await assertNotMainAdmin(context.supabase, data.userId);
+    await assertNotMainAdmin(supabaseAdmin, data.userId);
 
     const requestedRole = data.role && data.role !== "user_request" ? data.role : null;
     let appliedRole: z.infer<typeof RoleEnum> | null = requestedRole;
@@ -259,9 +261,9 @@ export const updateStaffPermissions = createServerFn({ method: "POST" })
     }
 
     if (appliedRole) {
-      const { error: roleDelErr } = await context.supabase.from("user_roles").delete().eq("user_id", data.userId);
+      const { error: roleDelErr } = await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
       if (roleDelErr) throw new Error(roleDelErr.message);
-      const { error: roleInsErr } = await context.supabase.from("user_roles").insert({ user_id: data.userId, role: appliedRole });
+      const { error: roleInsErr } = await supabaseAdmin.from("user_roles").insert({ user_id: data.userId, role: appliedRole });
       if (roleInsErr) throw new Error(roleInsErr.message);
     }
 
