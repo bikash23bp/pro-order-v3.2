@@ -5,6 +5,8 @@ type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
 };
 
+const DEFAULT_LOVABLE_PROJECT_ID = "obxcohpzilphezwawhum";
+
 let serverEntryPromise: Promise<ServerEntry> | undefined;
 
 function hydrateProcessEnv(env: unknown) {
@@ -44,6 +46,12 @@ function hydrateProcessEnv(env: unknown) {
   for (const key of ["SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SERVICE_ROLE_KEY"]) {
     if (process.env[key]) process.env[key] = normalizeEnvValue(process.env[key]);
   }
+
+  if (isDefaultLovableBackend(process.env.SUPABASE_URL)) {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_PUBLISHABLE_KEY;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  }
 }
 
 function normalizeEnvValue(value: string) {
@@ -51,6 +59,15 @@ function normalizeEnvValue(value: string) {
   const assignment = normalized.match(/^[A-Z0-9_]+\s*=\s*(.+)$/);
   if (assignment?.[1]) normalized = assignment[1].trim().replace(/^['"]|['"]$/g, "");
   return normalized.replace(/^Bearer\s+/i, "").trim();
+}
+
+function isDefaultLovableBackend(value: string | undefined) {
+  if (!value) return false;
+  try {
+    return new URL(value).hostname.split(".")[0] === DEFAULT_LOVABLE_PROJECT_ID;
+  } catch {
+    return false;
+  }
 }
 
 async function getServerEntry(): Promise<ServerEntry> {
