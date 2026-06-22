@@ -286,7 +286,7 @@ export const uploadStaffAvatar = createServerFn({ method: "POST" })
     const supabaseAdmin = await getAdminClient();
     const userId = String(data.get("userId") ?? "");
     if (!z.string().uuid().safeParse(userId).success) throw new Error("Invalid user id");
-    await assertNotMainAdmin(context.supabase, userId);
+    await assertNotMainAdmin(supabaseAdmin, userId);
 
     const avatar = data.get("avatar");
     if (!(avatar instanceof File)) throw new Error("Avatar image is required");
