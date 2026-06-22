@@ -437,19 +437,20 @@ export const removeStaffUser = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await ensureAdmin(context);
-    await assertNotMainAdmin(context.supabase, data.userId);
+    const supabaseAdmin = await getAdminClient();
+    await assertNotMainAdmin(supabaseAdmin, data.userId);
     if (data.userId === context.userId) {
       throw new Error("You cannot remove your own access");
     }
 
-    const { data: profile, error: lookupErr } = await context.supabase
+    const { data: profile, error: lookupErr } = await supabaseAdmin
       .from("profiles")
       .select("id")
       .eq("id", data.userId)
       .maybeSingle();
     if (lookupErr) throw new Error(lookupErr.message);
     if (!profile) {
-      const { error: inviteErr } = await context.supabase
+      const { error: inviteErr } = await supabaseAdmin
         .from("pending_user_invites")
         .delete()
         .eq("id", data.userId)
@@ -462,20 +463,20 @@ export const removeStaffUser = createServerFn({ method: "POST" })
     const emptyPerms = Object.fromEntries(
       ALL_PERMISSION_KEYS.map((k) => [k, false]),
     );
-    const { error: permErr } = await context.supabase
+    const { error: permErr } = await supabaseAdmin
       .from("user_permissions")
       .upsert({ user_id: data.userId, ...emptyPerms } as never, { onConflict: "user_id" });
     if (permErr) throw new Error(permErr.message);
 
     // Demote to staff
-    const { error: roleDelErr } = await context.supabase.from("user_roles").delete().eq("user_id", data.userId);
+    const { error: roleDelErr } = await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
     if (roleDelErr) throw new Error(roleDelErr.message);
-    const { error: roleInsErr } = await context.supabase
+    const { error: roleInsErr } = await supabaseAdmin
       .from("user_roles")
       .insert({ user_id: data.userId, role: "staff" });
     if (roleInsErr) throw new Error(roleInsErr.message);
 
-    const { error: profileErr } = await context.supabase
+    const { error: profileErr } = await supabaseAdmin
       .from("profiles")
       .update({ is_blocked: true })
       .eq("id", data.userId);
