@@ -29,6 +29,13 @@ const supabaseUrl = cleanEnv(process.env.PERSONAL_SUPABASE_URL) || (isDefaultLov
 const supabasePublishableKey = cleanEnv(process.env.PERSONAL_SUPABASE_PUBLISHABLE_KEY) || (isDefaultLovableBackend(fallbackSupabaseUrl) ? "" : fallbackSupabasePublishableKey);
 const supabaseProjectId = supabaseUrl ? new URL(supabaseUrl).hostname.split(".")[0] : cleanEnv(process.env.VITE_SUPABASE_PROJECT_ID);
 
+// Server functions read process.env.SUPABASE_* directly in dev/build. Keep them
+// pinned to the user's personal backend when those secrets are present.
+if (supabaseUrl) process.env.SUPABASE_URL = supabaseUrl;
+if (supabasePublishableKey) process.env.SUPABASE_PUBLISHABLE_KEY = supabasePublishableKey;
+const personalServiceRoleKey = cleanEnv(process.env.PERSONAL_SUPABASE_SERVICE_ROLE_KEY);
+if (personalServiceRoleKey) process.env.SUPABASE_SERVICE_ROLE_KEY = personalServiceRoleKey;
+
 // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
 // @cloudflare/vite-plugin builds from this — wrangler.jsonc main alone is insufficient.
 // Force-enable nitro so Cloudflare Workers Builds (outside Lovable sandbox) also produces

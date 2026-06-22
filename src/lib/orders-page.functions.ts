@@ -22,7 +22,7 @@ const OrdersInput = z.object({
 type CountBucket = { count: number; amount: number };
 
 const ORDER_LIST_SELECT = "id, order_number, invoice_number, customer_name, customer_phone, customer_email, customer_address, status, total_amount, delivery_charge, discount_amount, advance_amount, advance_source_id, advance_txn_id, subtotal, created_at, consignment_id, tracking_url, invoice_note, internal_note, courier_id, order_source_id, source, preorder, preorder_date, customer_type, created_by, updated_by, oms_sender_name, oms_sender_order_no, source_site_id, is_paid_marketing, order_sources(name)";
-const ORDER_LIST_COUNT_MODE: "planned" = "planned";
+const ORDER_LIST_COUNT_MODE: "exact" = "exact";
 
 const ACTIVE_ORDER_STATUSES = new Set([
   "pending_web",
@@ -384,7 +384,7 @@ export const getOrderCountsPage = createServerFn({ method: "POST" })
     const { data: tabCountsData, error } = await (context.supabase as any).rpc("get_order_tab_counts_v2", countArgs);
     if (error) throw new Error(error.message);
     const today = new Date().toISOString().slice(0, 10);
-    const { count } = await context.supabase.from("orders").select("id", { count: "planned", head: true }).eq("preorder", true).not("preorder_date", "is", null).lte("preorder_date", today);
+    const { count } = await context.supabase.from("orders").select("id", { count: "exact", head: true }).eq("preorder", true).not("preorder_date", "is", null).lte("preorder_date", today);
     const normalized = tabCountsData && typeof tabCountsData === "object"
       ? {
           ...(tabCountsData as Record<string, unknown>),

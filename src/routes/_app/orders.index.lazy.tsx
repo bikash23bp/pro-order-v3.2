@@ -1,7 +1,7 @@
 import { createLazyFileRoute, Link, useSearch, useNavigate } from "@tanstack/react-router";
 import { MemberBadge } from "@/components/MemberBadge";
 import { useEffect, useMemo, useRef, useState, Fragment, lazy, Suspense } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Plus, Search, Eye, Trash2, FileText, RefreshCw, Pencil, Printer, Send, Crown, Loader2, Truck, Download, Phone, Upload, StickyNote, UserPlus, ChevronDown, ChevronUp } from "lucide-react";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -196,8 +196,13 @@ const TAB_STATUSES: TabDef[] = [
   ...PIPELINE_TABS,
 ];
 
-const ORDER_LIST_STALE_MS = 0;
+const ORDER_LIST_STALE_MS = 30_000;
 const ORDER_LIST_GC_MS = 30 * 60_000;
+const transientOrderLoadRetry = (failureCount: number, error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (/unauthorized|forbidden|invalid token/i.test(message)) return false;
+  return failureCount < 3;
+};
 
 // High-contrast pill colors (solid bg + white text) so counts are clearly readable.
 const TAB_COLOR_CLASSES: Record<string, {
@@ -530,7 +535,10 @@ function OrdersPage() {
     staleTime: ORDER_LIST_STALE_MS,
     gcTime: ORDER_LIST_GC_MS,
     refetchOnWindowFocus: false,
-    refetchOnMount: "always",
+    refetchOnMount: false,
+    placeholderData: keepPreviousData,
+    retry: transientOrderLoadRetry,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
     queryFn: async () => {
       return await listOrders({ data: {
         status: effectiveStatusFilter, page, limit,
@@ -555,7 +563,9 @@ function OrdersPage() {
   const rows: Order[] = ordersQuery.data?.rows ?? [];
   const totalCount = ordersQuery.data?.totalCount ?? 0;
   const serverPage = ordersQuery.data?.currentPage ?? page;
-  const loading = ordersQuery.isPending || ordersQuery.isFetching;
+  const loading = ordersQuery.isPending;
+  const refreshing = ordersQuery.isFetching && !ordersQuery.isPending;
+  const listLoadFailed = ordersQuery.isError && !ordersQuery.data;
 
   useEffect(() => {
     if (!session || loading) return;
@@ -613,6 +623,9 @@ function OrdersPage() {
     staleTime: 10_000,
     gcTime: 5 * 60_000,
     refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
+    retry: transientOrderLoadRetry,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
     queryFn: async () => {
       return await getOrderCounts({ data: {
         source: sourceFilter, site: siteFilter, courier: courierFilter,
@@ -734,6 +747,10 @@ function OrdersPage() {
     if (n >= 100000) return `${(n / 1000).toFixed(0)}k`;
     return Math.round(n).toLocaleString("en-IN");
   };
+  const countsPriming = countsQuery.isPending && !countsQuery.data;
+  const countsUnavailable = countsQuery.isError && !countsQuery.data;
+  const fmtTabCount = (key: string) => countsPriming ? "…" : countsUnavailable ? "—" : (tabCounts[key] ?? 0).toLocaleString("en-IN");
+  const fmtTabAmount = (key: string) => countsPriming ? "৳ …" : countsUnavailable ? "৳ —" : `৳ ${fmtAmount(tabAmounts[key] ?? 0)}`;
 
   const todayISO = useMemo(() => {
     const d = new Date();
@@ -1082,8 +1099,8 @@ function OrdersPage() {
         <div className="flex flex-wrap items-center gap-2">
           <SyncWebOrdersButton onDone={() => load(true)} />
           <SyncCourierStatusButton onDone={() => load(true)} />
-          <Button variant="outline" onClick={() => load(true)} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          <Button variant="outline" onClick={() => load(true)} disabled={loading || refreshing}>
+            <RefreshCw className={`h-4 w-4 ${loading || refreshing ? "animate-spin" : ""}`} />
             Refresh
           </Button>
           <Button variant="outline" onClick={() => setImportOpen(true)}>
@@ -1303,8 +1320,8 @@ function OrdersPage() {
                     <span className="text-[10px] font-medium truncate w-full text-center">{activeTab?.label ?? "Select"}</span>
                     {activeTab && (
                       <>
-                        <span className="text-sm font-bold tabular-nums leading-tight">{tabCounts[activeTab.key] ?? 0}</span>
-                        <span className="text-[10px] font-semibold tabular-nums leading-tight">৳ {fmtAmount(tabAmounts[activeTab.key] ?? 0)}</span>
+                        <span className="text-sm font-bold tabular-nums leading-tight">{fmtTabCount(activeTab.key)}</span>
+                        <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(activeTab.key)}</span>
                       </>
                     )}
                   </div>
@@ -1367,8 +1384,8 @@ function OrdersPage() {
                     aria-pressed={active}
                   >
                     <span className="text-[10px] font-medium truncate w-full text-center leading-tight">{tab.label}</span>
-                    <span className="text-sm font-bold tabular-nums leading-tight">{tabCounts[tab.key] ?? 0}</span>
-                    <span className="text-[10px] font-semibold tabular-nums leading-tight">৳ {fmtAmount(tabAmounts[tab.key] ?? 0)}</span>
+                    <span className="text-sm font-bold tabular-nums leading-tight">{fmtTabCount(tab.key)}</span>
+                    <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(tab.key)}</span>
                   </button>
                 );
                 return (
@@ -1382,8 +1399,8 @@ function OrdersPage() {
                     aria-pressed={active}
                   >
                     <span className="text-[10px] font-medium truncate w-full text-center leading-tight">{tab.label}</span>
-                    <span className="text-sm font-bold tabular-nums leading-tight">{tabCounts[tab.key] ?? 0}</span>
-                    <span className="text-[10px] font-semibold tabular-nums leading-tight">৳ {fmtAmount(tabAmounts[tab.key] ?? 0)}</span>
+                    <span className="text-sm font-bold tabular-nums leading-tight">{fmtTabCount(tab.key)}</span>
+                    <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(tab.key)}</span>
                   </button>
                 );
               })}
@@ -1403,8 +1420,8 @@ function OrdersPage() {
                     aria-pressed={active}
                   >
                     <span className="text-[10px] font-semibold truncate w-full text-center leading-tight">{tab.label}</span>
-                    <span className="text-sm font-bold tabular-nums leading-tight">{tabCounts[tab.key] ?? 0}</span>
-                    <span className="text-[10px] font-semibold tabular-nums leading-tight">৳ {fmtAmount(tabAmounts[tab.key] ?? 0)}</span>
+                    <span className="text-sm font-bold tabular-nums leading-tight">{fmtTabCount(tab.key)}</span>
+                    <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(tab.key)}</span>
                   </button>
                 );
               })}
@@ -1493,12 +1510,14 @@ function OrdersPage() {
               {selected.size > 0 ? `${selected.size} selected` : "Select all"}
             </span>
             <span className="ml-auto text-muted-foreground hidden sm:inline">
-              {totalCount} order{totalCount === 1 ? "" : "s"}
+              {totalCount} order{totalCount === 1 ? "" : "s"}{refreshing ? " · refreshing" : ""}
             </span>
           </div>
 
           {loading ? (
             <div className="p-8 text-center text-muted-foreground">Loading…</div>
+          ) : listLoadFailed ? (
+            <div className="p-12 text-center text-muted-foreground">Orders could not load. Please refresh.</div>
           ) : totalCount === 0 ? (
             <div className="p-12 text-center text-muted-foreground">No orders found.</div>
           ) : (
