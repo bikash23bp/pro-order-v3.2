@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { ALL_PERMISSION_KEYS, FULL_PERMISSIONS } from "@/lib/permissions";
 
 const RoleEnum = z.enum(["business_owner", "admin", "manager", "staff", "user_request"]);
@@ -17,6 +16,11 @@ const Input = z.object({
   permissions: Permissions,
   password: z.string().min(8).max(128).optional(),
 });
+
+async function getAdminClient() {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  return supabaseAdmin;
+}
 
 export const createStaffUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
