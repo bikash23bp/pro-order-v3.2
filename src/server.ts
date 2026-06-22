@@ -61,6 +61,15 @@ function normalizeEnvValue(value: string) {
   return normalized.replace(/^Bearer\s+/i, "").trim();
 }
 
+function isDefaultLovableBackend(value: string | undefined) {
+  if (!value) return false;
+  try {
+    return new URL(value).hostname.split(".")[0] === DEFAULT_LOVABLE_PROJECT_ID;
+  } catch {
+    return false;
+  }
+}
+
 async function getServerEntry(): Promise<ServerEntry> {
   if (!serverEntryPromise) {
     serverEntryPromise = import("@tanstack/react-start/server-entry").then(
