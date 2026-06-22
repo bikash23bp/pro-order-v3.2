@@ -492,12 +492,13 @@ export const deleteStaffUser = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await ensureAdmin(context);
-    await assertNotMainAdmin(context.supabase, data.userId);
+    const supabaseAdmin = await getAdminClient();
+    await assertNotMainAdmin(supabaseAdmin, data.userId);
     if (data.userId === context.userId) {
       throw new Error("You cannot delete your own account");
     }
 
-    const { data: profile, error: profileLookupErr } = await context.supabase
+    const { data: profile, error: profileLookupErr } = await supabaseAdmin
       .from("profiles")
       .select("email")
       .eq("id", data.userId)
@@ -505,7 +506,7 @@ export const deleteStaffUser = createServerFn({ method: "POST" })
     if (profileLookupErr) throw new Error(profileLookupErr.message);
 
     if (!profile) {
-      const { error: inviteErr } = await context.supabase
+      const { error: inviteErr } = await supabaseAdmin
         .from("pending_user_invites")
         .delete()
         .eq("id", data.userId)
@@ -514,15 +515,15 @@ export const deleteStaffUser = createServerFn({ method: "POST" })
       return { ok: true };
     }
 
-    const { error: permErr } = await context.supabase.from("user_permissions").delete().eq("user_id", data.userId);
+    const { error: permErr } = await supabaseAdmin.from("user_permissions").delete().eq("user_id", data.userId);
     if (permErr) throw new Error(permErr.message);
-    const { error: roleErr } = await context.supabase.from("user_roles").delete().eq("user_id", data.userId);
+    const { error: roleErr } = await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
     if (roleErr) throw new Error(roleErr.message);
-    const { error: profileErr } = await context.supabase.from("profiles").update({ is_blocked: true }).eq("id", data.userId);
+    const { error: profileErr } = await supabaseAdmin.from("profiles").update({ is_blocked: true }).eq("id", data.userId);
     if (profileErr) throw new Error(profileErr.message);
 
     if (profile?.email) {
-      const { error: inviteErr } = await context.supabase
+      const { error: inviteErr } = await supabaseAdmin
         .from("pending_user_invites")
         .delete()
         .eq("email_normalized", profile.email.toLowerCase())
@@ -576,7 +577,7 @@ export const setUserPassword = createServerFn({ method: "POST" })
     await ensurePasswordManager(context);
     const supabaseAdmin = await getAdminClient();
     // Even password managers cannot touch the main admin
-    await assertNotMainAdmin(context.supabase, data.userId);
+    await assertNotMainAdmin(supabaseAdmin, data.userId);
 
     const { error } = await supabaseAdmin.auth.admin.updateUserById(
       data.userId,
