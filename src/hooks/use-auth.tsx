@@ -24,7 +24,14 @@ type ProfileBundle = {
 };
 
 const CACHE_KEY = (uid: string) => `auth:profile:${uid}`;
-const CURRENT_BACKEND_HOST = "cmqqxjfadpfbtvlykcgz.supabase.co";
+const CURRENT_BACKEND_HOST = (() => {
+  try {
+    const configuredUrl = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+    return configuredUrl ? new URL(configuredUrl).host : null;
+  } catch {
+    return null;
+  }
+})();
 
 // Module-level caches dedupe across hook instances
 const memCache = new Map<string, ProfileBundle>();
@@ -222,7 +229,7 @@ export function useAuth() {
       if (!issuer || typeof window === "undefined") return false;
       try {
         const payload = JSON.parse(window.atob(issuer.replace(/-/g, "+").replace(/_/g, "/"))) as { iss?: string };
-        if (!payload.iss || payload.iss.includes(CURRENT_BACKEND_HOST)) return false;
+        if (!CURRENT_BACKEND_HOST || !payload.iss || payload.iss.includes(CURRENT_BACKEND_HOST)) return false;
         await supabase.auth.signOut();
         setSession(null);
         setUser(null);
