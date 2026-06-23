@@ -34,6 +34,7 @@ const PRESET_LABELS: Record<Exclude<PresetKey, "all">, string> = {
   week: "This Week",
   month: "This Month",
   year: "This Year",
+  last365: "Last 1 Year",
   custom: "Custom",
 };
 
