@@ -849,22 +849,8 @@ function OrdersPage() {
   };
   const countsPriming = countsQuery.isPending && !countsQuery.data;
   const countsUnavailable = countsQuery.isError && !countsQuery.data;
-  // Odometer-style ticker while counts are loading: each tab starts at 1 and
-  // ramps up (1, 2, 4, 7, 12, 20, 34…) until the real count arrives.
-  const [tickStep, setTickStep] = useState(0);
-  useEffect(() => {
-    if (!countsPriming) { setTickStep(0); return; }
-    const id = window.setInterval(() => setTickStep((s) => s + 1), 120);
-    return () => window.clearInterval(id);
-  }, [countsPriming]);
-  const risingTick = (key: string) => {
-    // Per-tab offset so they don't all show the same number.
-    const offset = (key.charCodeAt(0) || 0) % 3;
-    const n = tickStep + offset;
-    return Math.max(1, Math.floor(Math.pow(1.35, n)));
-  };
-  const fmtTabCount = (key: string) => countsPriming ? risingTick(key).toLocaleString("en-IN") : countsUnavailable ? "—" : (tabCounts[key] ?? 0).toLocaleString("en-IN");
-  const fmtTabAmount = (key: string) => countsPriming ? `৳ ${fmtAmount(risingTick(key) * 100)}` : countsUnavailable ? "৳ —" : `৳ ${fmtAmount(tabAmounts[key] ?? 0)}`;
+  const fmtTabCount = (key: string) => countsPriming ? "…" : countsUnavailable ? "—" : (tabCounts[key] ?? 0).toLocaleString("en-IN");
+  const fmtTabAmount = (key: string) => countsPriming ? "৳ …" : countsUnavailable ? "৳ —" : `৳ ${fmtAmount(tabAmounts[key] ?? 0)}`;
 
   const todayISO = useMemo(() => {
     const d = new Date();
