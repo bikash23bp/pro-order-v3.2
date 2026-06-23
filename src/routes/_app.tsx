@@ -48,15 +48,8 @@ function AppLayout() {
     if (loading || profileLoading) return;
     if (!session) return;
     if (!role || !permissions) {
-      // Authenticated but no role assigned yet — redirect to pending approval
-      navigate({ to: "/pending-approval" });
-      return;
-    }
-    // user_request role: only allowed on /pending-approval
-    if (role === "user_request") {
-      if (path !== "/pending-approval") {
-        navigate({ to: "/pending-approval" });
-      }
+      // No role assigned — nothing to gate; let the user sit on the current
+      // page. use-auth handles signing out with a clear error message.
       return;
     }
     if (!canAccessRoute(path, role, permissions)) {

@@ -1,7 +1,7 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
-import { Search, Save, Loader2, Camera, UserPlus2 } from "lucide-react";
+import { Search, Save, Loader2, Camera } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { Input } from "@/components/ui/input";
@@ -252,9 +252,6 @@ const isMainAdmin = (email: string | null) => (email ?? "").toLowerCase() === MA
               Status: r.is_blocked ? "Blocked" : r.pending ? "Pending" : "Active",
             }))}
           />
-          <Button asChild variant="outline" size="sm">
-            <Link to="/new-user-requests"><UserPlus2 className="h-4 w-4" /> New User Requests</Link>
-          </Button>
           <AddUserDialog onCreated={load} />
         </div>
       </div>

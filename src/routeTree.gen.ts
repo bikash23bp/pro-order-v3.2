@@ -10,7 +10,6 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
-import { Route as PendingApprovalRouteImport } from './routes/pending-approval'
 import { Route as AutoCallRouteImport } from './routes/auto-call'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/_app'
@@ -31,7 +30,6 @@ import { Route as AppOrdersRouteImport } from './routes/_app/orders'
 import { Route as AppOrderSourcesRouteImport } from './routes/_app/order-sources'
 import { Route as AppOrderPageTemplatesRouteImport } from './routes/_app/order-page-templates'
 import { Route as AppOmsEndpointsRouteImport } from './routes/_app/oms-endpoints'
-import { Route as AppNewUserRequestsRouteImport } from './routes/_app/new-user-requests'
 import { Route as AppMarketingRouteImport } from './routes/_app/marketing'
 import { Route as AppInvoiceStickerSettingsRouteImport } from './routes/_app/invoice-sticker-settings'
 import { Route as AppInvoiceNumberingSettingsRouteImport } from './routes/_app/invoice-numbering-settings'
@@ -86,11 +84,6 @@ import { Route as AppOrdersOrderIdInvoiceRouteImport } from './routes/_app/order
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PendingApprovalRoute = PendingApprovalRouteImport.update({
-  id: '/pending-approval',
-  path: '/pending-approval',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AutoCallRoute = AutoCallRouteImport.update({
@@ -190,11 +183,6 @@ const AppOrderPageTemplatesRoute = AppOrderPageTemplatesRouteImport.update({
 const AppOmsEndpointsRoute = AppOmsEndpointsRouteImport.update({
   id: '/oms-endpoints',
   path: '/oms-endpoints',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppNewUserRequestsRoute = AppNewUserRequestsRouteImport.update({
-  id: '/new-user-requests',
-  path: '/new-user-requests',
   getParentRoute: () => AppRoute,
 } as any)
 const AppMarketingRoute = AppMarketingRouteImport.update({
@@ -465,7 +453,6 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/auto-call': typeof AutoCallRoute
-  '/pending-approval': typeof PendingApprovalRoute
   '/reset-password': typeof ResetPasswordRoute
   '/advance-payment-sources': typeof AppAdvancePaymentSourcesRoute
   '/categories': typeof AppCategoriesRoute
@@ -483,7 +470,6 @@ export interface FileRoutesByFullPath {
   '/invoice-numbering-settings': typeof AppInvoiceNumberingSettingsRoute
   '/invoice-sticker-settings': typeof AppInvoiceStickerSettingsRoute
   '/marketing': typeof AppMarketingRouteWithChildren
-  '/new-user-requests': typeof AppNewUserRequestsRoute
   '/oms-endpoints': typeof AppOmsEndpointsRoute
   '/order-page-templates': typeof AppOrderPageTemplatesRoute
   '/order-sources': typeof AppOrderSourcesRoute
@@ -539,7 +525,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/auto-call': typeof AutoCallRoute
-  '/pending-approval': typeof PendingApprovalRoute
   '/reset-password': typeof ResetPasswordRoute
   '/advance-payment-sources': typeof AppAdvancePaymentSourcesRoute
   '/categories': typeof AppCategoriesRoute
@@ -554,7 +539,6 @@ export interface FileRoutesByTo {
   '/inventory': typeof AppInventoryRoute
   '/invoice-numbering-settings': typeof AppInvoiceNumberingSettingsRoute
   '/invoice-sticker-settings': typeof AppInvoiceStickerSettingsRoute
-  '/new-user-requests': typeof AppNewUserRequestsRoute
   '/oms-endpoints': typeof AppOmsEndpointsRoute
   '/order-page-templates': typeof AppOrderPageTemplatesRoute
   '/order-sources': typeof AppOrderSourcesRoute
@@ -611,7 +595,6 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
   '/auto-call': typeof AutoCallRoute
-  '/pending-approval': typeof PendingApprovalRoute
   '/reset-password': typeof ResetPasswordRoute
   '/_app/advance-payment-sources': typeof AppAdvancePaymentSourcesRoute
   '/_app/categories': typeof AppCategoriesRoute
@@ -629,7 +612,6 @@ export interface FileRoutesById {
   '/_app/invoice-numbering-settings': typeof AppInvoiceNumberingSettingsRoute
   '/_app/invoice-sticker-settings': typeof AppInvoiceStickerSettingsRoute
   '/_app/marketing': typeof AppMarketingRouteWithChildren
-  '/_app/new-user-requests': typeof AppNewUserRequestsRoute
   '/_app/oms-endpoints': typeof AppOmsEndpointsRoute
   '/_app/order-page-templates': typeof AppOrderPageTemplatesRoute
   '/_app/order-sources': typeof AppOrderSourcesRoute
@@ -687,7 +669,6 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/auto-call'
-    | '/pending-approval'
     | '/reset-password'
     | '/advance-payment-sources'
     | '/categories'
@@ -705,7 +686,6 @@ export interface FileRouteTypes {
     | '/invoice-numbering-settings'
     | '/invoice-sticker-settings'
     | '/marketing'
-    | '/new-user-requests'
     | '/oms-endpoints'
     | '/order-page-templates'
     | '/order-sources'
@@ -761,7 +741,6 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/auto-call'
-    | '/pending-approval'
     | '/reset-password'
     | '/advance-payment-sources'
     | '/categories'
@@ -776,7 +755,6 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/invoice-numbering-settings'
     | '/invoice-sticker-settings'
-    | '/new-user-requests'
     | '/oms-endpoints'
     | '/order-page-templates'
     | '/order-sources'
@@ -832,7 +810,6 @@ export interface FileRouteTypes {
     | '/_app'
     | '/auth'
     | '/auto-call'
-    | '/pending-approval'
     | '/reset-password'
     | '/_app/advance-payment-sources'
     | '/_app/categories'
@@ -850,7 +827,6 @@ export interface FileRouteTypes {
     | '/_app/invoice-numbering-settings'
     | '/_app/invoice-sticker-settings'
     | '/_app/marketing'
-    | '/_app/new-user-requests'
     | '/_app/oms-endpoints'
     | '/_app/order-page-templates'
     | '/_app/order-sources'
@@ -908,7 +884,6 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   AuthRoute: typeof AuthRoute
   AutoCallRoute: typeof AutoCallRoute
-  PendingApprovalRoute: typeof PendingApprovalRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ApiPublicOmsInboundRoute: typeof ApiPublicOmsInboundRoute
   ApiPublicOmsProductsRoute: typeof ApiPublicOmsProductsRoute
@@ -928,13 +903,6 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/pending-approval': {
-      id: '/pending-approval'
-      path: '/pending-approval'
-      fullPath: '/pending-approval'
-      preLoaderRoute: typeof PendingApprovalRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auto-call': {
@@ -1075,13 +1043,6 @@ declare module '@tanstack/react-router' {
       path: '/oms-endpoints'
       fullPath: '/oms-endpoints'
       preLoaderRoute: typeof AppOmsEndpointsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/new-user-requests': {
-      id: '/_app/new-user-requests'
-      path: '/new-user-requests'
-      fullPath: '/new-user-requests'
-      preLoaderRoute: typeof AppNewUserRequestsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/marketing': {
@@ -1559,7 +1520,6 @@ interface AppRouteChildren {
   AppInvoiceNumberingSettingsRoute: typeof AppInvoiceNumberingSettingsRoute
   AppInvoiceStickerSettingsRoute: typeof AppInvoiceStickerSettingsRoute
   AppMarketingRoute: typeof AppMarketingRouteWithChildren
-  AppNewUserRequestsRoute: typeof AppNewUserRequestsRoute
   AppOmsEndpointsRoute: typeof AppOmsEndpointsRoute
   AppOrderPageTemplatesRoute: typeof AppOrderPageTemplatesRoute
   AppOrderSourcesRoute: typeof AppOrderSourcesRoute
@@ -1597,7 +1557,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppInvoiceNumberingSettingsRoute: AppInvoiceNumberingSettingsRoute,
   AppInvoiceStickerSettingsRoute: AppInvoiceStickerSettingsRoute,
   AppMarketingRoute: AppMarketingRouteWithChildren,
-  AppNewUserRequestsRoute: AppNewUserRequestsRoute,
   AppOmsEndpointsRoute: AppOmsEndpointsRoute,
   AppOrderPageTemplatesRoute: AppOrderPageTemplatesRoute,
   AppOrderSourcesRoute: AppOrderSourcesRoute,
@@ -1625,7 +1584,6 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   AuthRoute: AuthRoute,
   AutoCallRoute: AutoCallRoute,
-  PendingApprovalRoute: PendingApprovalRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ApiPublicOmsInboundRoute: ApiPublicOmsInboundRoute,
   ApiPublicOmsProductsRoute: ApiPublicOmsProductsRoute,
@@ -1641,13 +1599,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

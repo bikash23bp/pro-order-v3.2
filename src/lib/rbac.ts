@@ -8,7 +8,6 @@ type Rule = {
 
 // Route prefix -> roles (and optional permission flag) that may access it.
 const ROUTE_ACCESS: Rule[] = [
-  { prefix: "/pending-approval", roles: ["admin", "manager", "staff", "user_request"] },
   { prefix: "/dashboard", roles: ["admin", "manager", "staff"], permission: "can_view_dashboard" },
   { prefix: "/orders", roles: ["admin", "manager", "staff"], permission: "can_view_orders" },
   { prefix: "/orders/new", roles: ["admin", "manager", "staff"], permission: "can_manage_orders" },
@@ -35,12 +34,11 @@ const ROUTE_ACCESS: Rule[] = [
   { prefix: "/order-page-templates", roles: ["admin", "manager", "staff"], permission: "can_view_orders" },
   { prefix: "/tasks", roles: ["admin", "manager", "staff"], permission: "can_manage_telesales" },
   { prefix: "/users", roles: ["admin"], permission: "can_manage_users" },
-  { prefix: "/new-user-requests", roles: ["admin"], permission: "can_manage_users" },
   { prefix: "/chat-settings", roles: ["admin"] },
   { prefix: "/staff-live", roles: ["admin", "manager", "staff"], permission: "can_view_staff_report" },
   { prefix: "/staff-reports", roles: ["admin", "manager", "staff"], permission: "can_view_staff_report" },
   { prefix: "/auto-call", roles: ["admin", "manager", "staff"], permission: "can_manage_telesales" },
-  { prefix: "/settings", roles: ["admin", "manager", "staff", "user_request"] },
+  { prefix: "/settings", roles: ["admin", "manager", "staff"] },
   { prefix: "/inventory", roles: ["admin", "manager", "staff"], permission: "can_view_reports" },
   { prefix: "/db-setup", roles: [], permission: "can_manage_db_setup" },
   
