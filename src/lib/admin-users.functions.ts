@@ -498,10 +498,7 @@ export const removeStaffUser = createServerFn({ method: "POST" })
     const emptyPerms = Object.fromEntries(
       ALL_PERMISSION_KEYS.map((k) => [k, false]),
     );
-    const { error: permErr } = await supabaseAdmin
-      .from("user_permissions")
-      .upsert({ user_id: data.userId, ...emptyPerms } as never, { onConflict: "user_id" });
-    if (permErr) throw new Error(permErr.message);
+    await upsertUserPermissions(supabaseAdmin, data.userId, emptyPerms as z.infer<typeof Permissions>);
 
     // Demote to staff
     const { error: roleDelErr } = await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
