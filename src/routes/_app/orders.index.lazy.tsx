@@ -91,6 +91,7 @@ type Order = {
   advance_txn_id: string | null;
   subtotal: number;
   created_at: string;
+  updated_at?: string | null;
   consignment_id: string | null;
   tracking_url: string | null;
   invoice_note: string | null;

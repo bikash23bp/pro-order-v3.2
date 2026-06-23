@@ -30,6 +30,7 @@ export type OrderForTemplate = {
   subtotal: number;
   delivery_charge: number;
   created_at: string;
+  updated_at?: string | null;
   consignment_id: string | null;
   tracking_url: string | null;
   internal_note: string | null;
