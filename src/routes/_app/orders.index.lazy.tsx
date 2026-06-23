@@ -847,8 +847,8 @@ function OrdersPage() {
     if (n >= 100000) return `${(n / 1000).toFixed(0)}k`;
     return Math.round(n).toLocaleString("en-IN");
   };
-  const countsPriming = countsQuery.isPending && !countsQuery.data;
-  const countsUnavailable = countsQuery.isError && !countsQuery.data;
+  const countsPriming = !tabCountsData && (ordersQuery.isPending || countsQuery.isPending || countsQuery.isFetching || !countsQuery.data);
+  const countsUnavailable = !countsPriming && (countsQuery.isError || !tabCountsData);
   const fmtTabCount = (key: string) => countsPriming ? "…" : countsUnavailable ? "—" : (tabCounts[key] ?? 0).toLocaleString("en-IN");
   const fmtTabAmount = (key: string) => countsPriming ? "৳ …" : countsUnavailable ? "৳ —" : `৳ ${fmtAmount(tabAmounts[key] ?? 0)}`;
 
