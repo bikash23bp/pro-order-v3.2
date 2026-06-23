@@ -650,8 +650,8 @@ function OrdersPage() {
   const countsQuery = useQuery({
     queryKey: countsQueryKey,
     enabled: !!session,
-    staleTime: 30_000,
-    gcTime: 5 * 60_000,
+    staleTime: 2 * 60_000,
+    gcTime: 10 * 60_000,
     refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
     retry: transientOrderLoadRetry,
