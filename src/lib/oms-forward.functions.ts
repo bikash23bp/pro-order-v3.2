@@ -121,6 +121,14 @@ async function sendToDestination(
     created_by: userId,
   });
 
+  if (result.ok) {
+    await supabase
+      .from("orders")
+      .update({ forwarded_to_partner_at: new Date().toISOString() })
+      .eq("id", orderId)
+      .is("forwarded_to_partner_at", null);
+  }
+
   return result;
 }
 
