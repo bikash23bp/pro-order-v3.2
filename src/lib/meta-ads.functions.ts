@@ -1,8 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { fetchMetaHourlyInsights, fetchMetaInsights, stripActPrefix, testMetaCredentials } from "./meta-ads.server";
+// Lazy admin client — avoids top-level client.server import (keeps service-role key out of client bundle)
+const getAdmin = async () => (await import("@/integrations/supabase/client.server")).(await getAdmin());
+
 
 export type MetaAccount = {
   id: string;
@@ -127,7 +129,7 @@ export const deleteMetaAccount = createServerFn({ method: "POST" })
 export async function syncOneAccount(
   accountId: string,
 ): Promise<{ inserted: number; status: string; message?: string }> {
-  const { data: acc, error } = await supabaseAdmin
+  const { data: acc, error } = await (await getAdmin())
     .from("meta_ads_accounts")
     .select("id, active, status, access_token, ad_account_id, usd_rate")
     .eq("id", accountId)
@@ -143,7 +145,7 @@ export async function syncOneAccount(
   });
 
   if (!result.ok) {
-    await supabaseAdmin
+    await (await getAdmin())
       .from("meta_ads_accounts")
       .update({
         status: result.status,
@@ -169,11 +171,11 @@ export async function syncOneAccount(
     }));
 
   if (rows.length > 0) {
-    const { error: upErr } = await supabaseAdmin
+    const { error: upErr } = await (await getAdmin())
       .from("meta_ad_expenses")
       .upsert(rows, { onConflict: "account_id,campaign_id,expense_date" });
     if (upErr) {
-      await supabaseAdmin
+      await (await getAdmin())
         .from("meta_ads_accounts")
         .update({
           status: "error",
@@ -185,7 +187,7 @@ export async function syncOneAccount(
     }
   }
 
-  await supabaseAdmin
+  await (await getAdmin())
     .from("meta_ads_accounts")
     .update({
       status: "connected",
@@ -207,7 +209,7 @@ export const syncMetaAccount = createServerFn({ method: "POST" })
 export const syncAllMetaAccounts = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
-    const { data: accs, error } = await supabaseAdmin
+    const { data: accs, error } = await (await getAdmin())
       .from("meta_ads_accounts")
       .select("id")
       .eq("active", true);
@@ -440,7 +442,7 @@ export const getMetaHourlyReport = createServerFn({ method: "GET" })
     }
 
     // 2) Pull hourly spend from Meta for each active account (today + yesterday).
-    const { data: accs } = await supabaseAdmin
+    const { data: accs } = await (await getAdmin())
       .from("meta_ads_accounts")
       .select("id, access_token, ad_account_id, usd_rate, account_name, active")
       .eq("active", true);

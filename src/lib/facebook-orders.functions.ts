@@ -1,16 +1,18 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+// Lazy admin client — avoids top-level client.server import (keeps service-role key out of client bundle)
+const getAdmin = async () => (await import("@/integrations/supabase/client.server")).(await getAdmin());
+
 
 export const getFacebookSettings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     // Admin/permission check happens in the RPC (get_facebook_settings_admin).
-    // We use supabaseAdmin to read secret columns that are revoked from the authenticated role.
+    // We use (await getAdmin()) to read secret columns that are revoked from the authenticated role.
     const { userId } = context;
     if (!userId) throw new Error("Unauthorized");
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await (await getAdmin())
       .from("facebook_settings")
       .select("*")
       .eq("id", true)
