@@ -1,7 +1,9 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
+import { signInWithPasswordOnServer } from "@/lib/auth.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +25,7 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
+  const signInOnServer = useServerFn(signInWithPasswordOnServer);
   const { redirect } = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -42,13 +45,16 @@ function AuthPage() {
     setLoading(true);
     const normalizedEmail = email.trim().toLowerCase();
     
-    const { error } = await supabase.auth.signInWithPassword({ 
-      email: normalizedEmail, 
-      password 
-    });
+    try {
+      const session = await signInOnServer({ data: { email: normalizedEmail, password } });
+      const { error } = await supabase.auth.setSession(session);
+      if (error) throw error;
+    } catch (error) {
+      setLoading(false);
+      return toast.error(error instanceof Error ? error.message : "Sign-in failed");
+    }
 
     setLoading(false);
-    if (error) return toast.error(error.message);
     
     toast.success("Signed in");
     navigate({ to: redirect });
