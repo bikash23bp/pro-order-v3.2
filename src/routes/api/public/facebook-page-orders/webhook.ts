@@ -1,6 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createHmac, timingSafeEqual } from "crypto";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+
+// Lazy-loaded inside handlers to keep the service-role client out of the
+// client bundle graph. Route files are client-reachable; only handler
+// bodies are stripped.
+async function getAdmin() {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  return supabaseAdmin;
+}
 
 type MessagingEvent = {
   sender?: { id?: string; name?: string };
@@ -35,7 +42,8 @@ async function logEvent(input: {
   order_id?: string | null;
 }) {
   try {
-    await supabaseAdmin.from("facebook_webhook_logs").insert({
+    const admin = await getAdmin();
+    await admin.from("facebook_webhook_logs").insert({
       event_type: input.event_type,
       page_id: input.page_id ?? null,
       page_name: input.page_name ?? null,
