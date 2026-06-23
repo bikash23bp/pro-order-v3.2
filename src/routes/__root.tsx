@@ -12,6 +12,21 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 
 import appCss from "../styles.css?url";
 
+function getPublicRuntimeEnvScript() {
+  const env = typeof process !== "undefined" ? process.env : {};
+  const supabaseUrl = env.SUPABASE_URL || env.VITE_SUPABASE_URL || "";
+  const supabaseKey = env.SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_ANON_KEY || "";
+
+  if (!supabaseUrl || !supabaseKey) return "";
+
+  return `globalThis.process=globalThis.process||{};globalThis.process.env=Object.assign({},globalThis.process.env||{},${JSON.stringify({
+    SUPABASE_URL: supabaseUrl,
+    SUPABASE_PUBLISHABLE_KEY: supabaseKey,
+    VITE_SUPABASE_URL: supabaseUrl,
+    VITE_SUPABASE_PUBLISHABLE_KEY: supabaseKey,
+  })});`;
+}
+
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -105,6 +120,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        <script suppressHydrationWarning dangerouslySetInnerHTML={{ __html: getPublicRuntimeEnvScript() }} />
       </head>
       <body>
         {children}
