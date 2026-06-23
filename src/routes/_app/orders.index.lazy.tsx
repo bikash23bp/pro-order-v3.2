@@ -848,8 +848,8 @@ function OrdersPage() {
   };
   const countsPriming = !tabCountsData && !countsQuery.isError && (ordersQuery.isPending || countsQuery.isPending || countsQuery.isFetching || !countsQuery.data);
   const countsUnavailable = countsQuery.isError || (!countsPriming && !tabCountsData);
-  const fmtTabCount = (key: string) => countsPriming ? "…" : countsUnavailable ? "—" : (tabCounts[key] ?? 0).toLocaleString("en-IN");
-  const fmtTabAmount = (key: string) => countsPriming ? "৳ …" : countsUnavailable ? "৳ —" : `৳ ${fmtAmount(tabAmounts[key] ?? 0)}`;
+  const fmtTabCount = (key: string) => countsUnavailable ? "—" : (tabCounts[key] ?? 0).toLocaleString("en-IN");
+  const fmtTabAmount = (key: string) => countsUnavailable ? "৳ —" : `৳ ${fmtAmount(tabAmounts[key] ?? 0)}`;
 
   const todayISO = useMemo(() => {
     const d = new Date();
