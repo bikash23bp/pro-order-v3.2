@@ -636,13 +636,15 @@ function OrdersPage() {
       typeof (window as any).requestIdleCallback === "function"
         ? (window as any).requestIdleCallback(cb, { timeout: 1500 })
         : window.setTimeout(cb, 250);
+    const warmTimers: number[] = [];
     idle(() => {
-      const warmKeys = ["pending", "ready_order", "processing", "ready_to_ship", "shipped", "no_response", "hold"];
-      for (const k of warmKeys) {
-        if (k === effectiveStatusFilter) continue;
-        prefetchOrderTab(k);
-      }
+      const warmKeys = ["pending", "ready_order", "processing", "ready_to_ship", "shipped", "no_response", "hold"]
+        .filter((k) => k !== effectiveStatusFilter);
+      warmKeys.forEach((k, index) => {
+        warmTimers.push(window.setTimeout(() => prefetchOrderTab(k), 900 * (index + 1)));
+      });
     });
+    return () => warmTimers.forEach((t) => window.clearTimeout(t));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, ordersQuery.isPending, ordersQuery.data, sourceFilter, siteFilter, courierFilter, partnerFilter, staffFilter, datePreset, fromIso, toIso, debouncedQ, tagPhoneFilter, advanceOnly]);
 
@@ -717,7 +719,7 @@ function OrdersPage() {
 
   const countsQuery = useQuery({
     queryKey: countsQueryKey,
-    enabled: !!session && (!search.dup || dupePhonesReady),
+    enabled: !!session && (!search.dup || dupePhonesReady) && !ordersQuery.isPending,
     staleTime: 2 * 60_000,
     gcTime: 10 * 60_000,
     refetchOnWindowFocus: false,
@@ -777,7 +779,7 @@ function OrdersPage() {
           );
         }
         if (timer) clearTimeout(timer);
-        timer = setTimeout(() => { void refetchAll(); }, 1500);
+        timer = setTimeout(() => { void refetchAll(); }, 4000);
       })
       .subscribe();
     return () => {
