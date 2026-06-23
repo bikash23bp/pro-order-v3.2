@@ -784,6 +784,9 @@ function OrdersPage() {
       queryClient.invalidateQueries({ queryKey: ["orders", "list"] }),
       queryClient.invalidateQueries({ queryKey: ["orders", "counts"] }),
     ]);
+    // Selection may reference rows that were deleted/edited by another user; clear it
+    // so subsequent bulk actions operate only on visible rows.
+    setSelected(new Set());
     // Notify topbar widgets (e.g. Duplicates badge) to refresh immediately.
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("orders:changed"));
