@@ -415,7 +415,11 @@ export const Route = createFileRoute("/api/public/webhooks/woocommerce")({
         const internalNoteUpdate = existing
           ? writeUnmatchedToNote(existing.internal_note, unmatched)
           : "";
-        const internalNoteCreate = `WooCommerce #${payload.id}${unmatchedBlock}`;
+        // Keep internal note clean: only surface unmatched-item info when present.
+        // Do NOT include "WooCommerce #<id>", session IDs, or event IDs — those are
+        // available elsewhere and clutter the visible note. Customer-facing note
+        // (Custom field + customer_note) is set via p_invoice_note above.
+        const internalNoteCreate = unmatchedBlock ? unmatchedBlock.replace(/^\n/, "") : "";
 
         const itemsJson = Array.from(aggregated.entries()).map(([product_id, v]) => ({
           product_id,
