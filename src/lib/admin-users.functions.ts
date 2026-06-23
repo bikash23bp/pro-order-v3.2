@@ -313,7 +313,16 @@ export const uploadStaffAvatar = createServerFn({ method: "POST" })
   });
 
 const MAIN_ADMIN_EMAIL = "bikash23bp@gmail.com";
-async function ensureAdmin(ctx: { supabase: any; userId: string }) {
+function isMainAdminClaims(claims: unknown): boolean {
+  const email = typeof claims === "object" && claims && "email" in claims
+    ? String((claims as { email?: unknown }).email ?? "")
+    : "";
+  return email.toLowerCase() === MAIN_ADMIN_EMAIL;
+}
+
+async function ensureAdmin(ctx: { supabase: any; userId: string; claims?: unknown }) {
+  if (isMainAdminClaims(ctx.claims)) return;
+
   const [adminRes, ownerRes] = await Promise.all([
     ctx.supabase.rpc("has_role", { _user_id: ctx.userId, _role: "admin" }),
     ctx.supabase.rpc("has_role", { _user_id: ctx.userId, _role: "business_owner" }),
