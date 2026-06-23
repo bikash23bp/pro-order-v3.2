@@ -97,8 +97,10 @@ function Dashboard() {
   const byStatus = useMemo(() => {
     const out = Object.fromEntries(STATUS_KEYS.map((k) => [k, { ...EMPTY }])) as Record<StatusKey, MinBucket>;
     if (!data) return out;
+    // First copy every matching key from byStatus, then let top-level overrides win
+    // (defensive: works whether RPC puts "all"/"preorder" inside byStatus or at top level).
     for (const [k, v] of Object.entries(data.byStatus ?? {})) {
-      if (k in out && k !== "all" && k !== "preorder") out[k as StatusKey] = v as MinBucket;
+      if (k in out) out[k as StatusKey] = v as MinBucket;
     }
     if (data.all) out.all = data.all;
     if (data.preorder) out.preorder = data.preorder;
