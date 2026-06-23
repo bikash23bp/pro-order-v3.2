@@ -103,8 +103,19 @@ export const Route = createFileRoute("/api/public/facebook-page-orders/webhook")
           });
         }
 
-        // Verify x-hub-signature-256 if app_secret configured
-        if (settings.app_secret) {
+        // app_secret is required — refusing to silently bypass HMAC verification.
+        if (!settings.app_secret) {
+          await logEvent({
+            event_type: "auth_failed",
+            status: "error",
+            http_status: 401,
+            error: "app_secret not configured",
+            payload: safeJson(body),
+          });
+          return new Response("App secret not configured", { status: 401 });
+        }
+        // Verify x-hub-signature-256
+        {
           const sig = request.headers.get("x-hub-signature-256");
           if (!sig || !sig.startsWith("sha256=")) {
             await logEvent({

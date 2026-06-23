@@ -127,7 +127,11 @@ export const listStaffUsers = createServerFn({ method: "GET" })
     const [profilesRes, rolesRes, permsRes, invitesRes] = await Promise.all([
       supabaseAdmin.from("profiles").select("id, email, full_name, avatar_url, is_blocked, chat_force_popup, created_at"),
       supabaseAdmin.from("user_roles").select("user_id, role"),
-      supabaseAdmin.from("user_permissions").select("*"),
+      supabaseAdmin
+        .from("user_permissions")
+        .select(
+          "user_id, " + ALL_PERMISSION_KEYS.join(", "),
+        ),
       supabaseAdmin.from("pending_user_invites").select("id, email, full_name, role, permissions, created_at").is("used_at", null),
     ]);
     if (profilesRes.error) throw new Error(profilesRes.error.message);

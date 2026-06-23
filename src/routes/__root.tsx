@@ -23,12 +23,14 @@ function getPublicRuntimeEnvScript() {
 
   if (!supabaseUrl || !supabaseKey) return "";
 
-  return `globalThis.__OMS_RUNTIME_ENV_READY__=true;globalThis.process=globalThis.process||{};globalThis.process.env=Object.assign({},globalThis.process.env||{},${JSON.stringify({
+  // Escape `</` so a malicious env value can't break out of the script tag.
+  const payload = JSON.stringify({
     SUPABASE_URL: supabaseUrl,
     SUPABASE_PUBLISHABLE_KEY: supabaseKey,
     VITE_SUPABASE_URL: supabaseUrl,
     VITE_SUPABASE_PUBLISHABLE_KEY: supabaseKey,
-  })});`;
+  }).replace(/</g, "\\u003c");
+  return `globalThis.__OMS_RUNTIME_ENV_READY__=true;globalThis.process=globalThis.process||{};globalThis.process.env=Object.assign({},globalThis.process.env||{},${payload});`;
 }
 
 function NotFoundComponent() {

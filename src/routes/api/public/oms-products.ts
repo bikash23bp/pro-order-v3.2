@@ -28,7 +28,9 @@ export const Route = createFileRoute("/api/public/oms-products")({
 
       GET: async ({ request }) => {
         const url = new URL(request.url);
-        const token = request.headers.get("x-oms-token") || url.searchParams.get("token") || "";
+        // Header only — accepting tokens via query string leaks them into
+        // access logs, CDN logs, and browser history.
+        const token = request.headers.get("x-oms-token") || "";
         if (!token) return json(401, { ok: false, error: "Missing X-OMS-Token header" });
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

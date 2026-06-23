@@ -197,6 +197,32 @@ export const testOmsDestination = createServerFn({ method: "POST" })
     z.object({ url: z.string().url(), api_token: z.string().min(1) }).parse(input),
   )
   .handler(async ({ data }) => {
+    // SSRF guard: only allow https public hosts. Block localhost, private,
+    // and cloud-metadata ranges so an attacker can't probe internal services.
+    try {
+      const parsed = new URL(data.url);
+      if (parsed.protocol !== "https:") {
+        return { ok: false, status: 0, body: "Only https:// URLs are allowed" };
+      }
+      const host = parsed.hostname.toLowerCase();
+      const blocked =
+        host === "localhost" ||
+        host === "0.0.0.0" ||
+        host === "::1" ||
+        host === "metadata.google.internal" ||
+        /^127\./.test(host) ||
+        /^10\./.test(host) ||
+        /^192\.168\./.test(host) ||
+        /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+        /^169\.254\./.test(host) ||
+        /^fe80:/i.test(host) ||
+        /^fc00:/i.test(host);
+      if (blocked) {
+        return { ok: false, status: 0, body: "Private/loopback hosts are not allowed" };
+      }
+    } catch {
+      return { ok: false, status: 0, body: "Invalid URL" };
+    }
     try {
       const res = await fetch(data.url, {
         method: "POST",

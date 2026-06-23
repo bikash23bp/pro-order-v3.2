@@ -60,7 +60,8 @@ function StaffLivePage() {
     const { data, error } = await supabase
       .from("profiles")
       .select("id, full_name, email, avatar_url, last_seen_at, is_blocked")
-      .order("last_seen_at", { ascending: false, nullsFirst: false });
+      .order("last_seen_at", { ascending: false, nullsFirst: false })
+      .limit(500);
     if (!error && data) setRows(data as Row[]);
     setLoading(false);
   }

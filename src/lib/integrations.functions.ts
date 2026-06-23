@@ -99,6 +99,20 @@ export const testWooIntegration = createServerFn({ method: "POST" })
     if (!row?.site_url || !row.consumer_key || !row.consumer_secret) {
       throw new Error("WooCommerce credentials are not configured.");
     }
+    // SSRF guard: only https public hosts.
+    try {
+      const parsed = new URL(row.site_url);
+      if (parsed.protocol !== "https:") throw new Error("Only https:// site URLs are allowed");
+      const host = parsed.hostname.toLowerCase();
+      if (
+        host === "localhost" || host === "0.0.0.0" || host === "::1" ||
+        /^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host) ||
+        /^172\.(1[6-9]|2\d|3[01])\./.test(host) || /^169\.254\./.test(host) ||
+        /^fe80:/i.test(host) || /^fc00:/i.test(host)
+      ) throw new Error("Private/loopback hosts are not allowed");
+    } catch (e) {
+      throw new Error(e instanceof Error ? e.message : "Invalid site URL");
+    }
     const auth = Buffer.from(`${row.consumer_key}:${row.consumer_secret}`).toString("base64");
     const res = await fetch(`${row.site_url}/wp-json/wc/v3/system_status`, {
       headers: { Authorization: `Basic ${auth}` },
