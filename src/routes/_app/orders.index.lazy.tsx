@@ -558,15 +558,6 @@ function OrdersPage() {
     return qb;
   };
 
-  const applyStatusFilter = (qb: any) => {
-    if (effectiveStatusFilter === "web") return qb.eq("source", "woocommerce");
-    if (effectiveStatusFilter === "web_pending" || effectiveStatusFilter === "pending_web") return qb.eq("status", "pending_web");
-    if (effectiveStatusFilter === "facebook") return qb.eq("source", "facebook");
-    if (effectiveStatusFilter === "preorder") return qb.eq("preorder", true);
-    if (effectiveStatusFilter === "all") return qb;
-    return qb.eq("status", effectiveStatusFilter);
-  };
-
   // ============ Orders list query — always fetch the selected tab ============
   const fromIso = dateRange.from.toISOString();
   const toIso = dateRange.to.toISOString();
