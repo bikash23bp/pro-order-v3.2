@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 // Lazy admin client — avoids top-level client.server import (keeps service-role key out of client bundle)
-const getAdmin = async () => (await import("@/integrations/supabase/client.server")).(await getAdmin());
+const getAdmin = async () => (await import("@/integrations/supabase/client.server")).supabaseAdmin;
 
 
 const Input = z.object({ orderId: z.string().uuid() });

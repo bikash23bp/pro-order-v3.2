@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { fetchMetaHourlyInsights, fetchMetaInsights, stripActPrefix, testMetaCredentials } from "./meta-ads.server";
 // Lazy admin client — avoids top-level client.server import (keeps service-role key out of client bundle)
-const getAdmin = async () => (await import("@/integrations/supabase/client.server")).(await getAdmin());
+const getAdmin = async () => (await import("@/integrations/supabase/client.server")).supabaseAdmin;
 
 
 export type MetaAccount = {
