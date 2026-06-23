@@ -105,29 +105,14 @@ async function fetchProfileBundle(userId: string): Promise<ProfileBundle | null>
     }
 
     if (!resolvedRole) {
-      const { data: claimed, error: claimError } = await supabase.rpc("claim_pending_user_invite");
-      if (claimError) {
-        console.warn("[auth] pending invite claim failed", claimError.message);
-      }
-
-      if (claimed) {
-        [roleRes, permRes, profileRes] = await Promise.all([
-          supabase.from("user_roles").select("role").eq("user_id", userId),
-          supabase.from("user_permissions").select("*").eq("user_id", userId).maybeSingle(),
-          supabase.from("profiles").select("full_name, avatar_url, email, inactivity_lock_enabled, inactivity_lock_seconds").eq("id", userId).maybeSingle(),
-        ]);
-        resolvedRole = pickHighestRole(roleRes.data);
-      }
-    }
-
-    if (!resolvedRole) {
-      // User is authenticated but has no assigned role yet — keep session alive
-      // so the UI can show a pending-approval page instead of forcing sign-out.
+      // No role assigned. Pending-approval flow is disabled — sign out and
+      // surface a clear error so an admin can grant access.
       clearLocal(userId);
       if (typeof window !== "undefined") {
         const { toast } = await import("sonner");
-        toast.error("Access denied. Contact an admin to get access.");
+        toast.error("No access. Contact an admin to be added as a user.");
       }
+      await supabase.auth.signOut();
       return null;
     }
 
