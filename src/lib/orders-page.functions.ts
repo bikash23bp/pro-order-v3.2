@@ -413,11 +413,8 @@ export const getOrderCountsPage = createServerFn({ method: "POST" })
         const amount = ((stpRows ?? []) as Array<{ total_amount: number | string | null }>)
           .reduce((a, r) => a + (Number(r.total_amount ?? 0) || 0), 0);
         sentToPartnerBucket = { count: stpCount ?? (stpRows?.length ?? 0), amount };
-      } else if (!isMissingForwardedColumn(stpErr)) {
-        throw stpErr;
       }
     } catch (err) {
-      if (!isMissingForwardedColumn(err as { message?: string | null; details?: string | null; code?: string | null })) throw err;
       /* keep zero bucket for older schemas/caches */
     }
     const normalized = tabCountsData && typeof tabCountsData === "object"
