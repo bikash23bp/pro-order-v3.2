@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { normalizePermissions, type AppPermissions } from "@/lib/permissions";
+import { FULL_PERMISSIONS, normalizePermissions, type AppPermissions } from "@/lib/permissions";
 
 export type { AppPermissions } from "@/lib/permissions";
 
 export type AppRole = "business_owner" | "admin" | "manager" | "staff" | "user_request";
 
 const ROLE_PRIORITY: AppRole[] = ["business_owner", "admin", "manager", "staff", "user_request"];
+const MAIN_ADMIN_EMAIL = "bikash23bp@gmail.com";
 
 type ProfileBundle = {
   role: AppRole;
@@ -82,7 +83,13 @@ function pickHighestRole(rows: Array<{ role: string | null }> | null | undefined
   return ROLE_PRIORITY.find((role) => roles.has(role)) ?? null;
 }
 
-async function fetchProfileBundle(userId: string): Promise<ProfileBundle | null> {
+function isMainAdminEmail(email: string | null | undefined): boolean {
+  return (email ?? "").toLowerCase() === MAIN_ADMIN_EMAIL;
+}
+
+async function fetchProfileBundle(authUser: User): Promise<ProfileBundle | null> {
+  const userId = authUser.id;
+  const userEmail = authUser.email?.toLowerCase() ?? null;
   const existing = inflight.get(userId);
   if (existing) return existing;
 
@@ -94,6 +101,32 @@ async function fetchProfileBundle(userId: string): Promise<ProfileBundle | null>
     ]);
 
     let resolvedRole = pickHighestRole(roleRes.data);
+
+    if (isMainAdminEmail(userEmail)) {
+      if (roleRes.error || permRes.error || profileRes.error) {
+        console.warn("[auth] main admin fallback used after profile load error", {
+          role: roleRes.error?.message,
+          perm: permRes.error?.message,
+          profile: profileRes.error?.message,
+        });
+      }
+
+      const bundle: ProfileBundle = {
+        role: resolvedRole ?? "business_owner",
+        permissions: FULL_PERMISSIONS,
+        profile: {
+          full_name: profileRes.data?.full_name ?? authUser.user_metadata?.full_name ?? null,
+          avatar_url: profileRes.data?.avatar_url ?? null,
+          email: profileRes.data?.email ?? userEmail,
+          inactivity_lock_enabled: profileRes.data?.inactivity_lock_enabled ?? false,
+          inactivity_lock_seconds: profileRes.data?.inactivity_lock_seconds ?? 1800,
+        },
+        cachedAt: Date.now(),
+      };
+      memCache.set(userId, bundle);
+      writeLocal(userId, bundle);
+      return bundle;
+    }
 
     if (roleRes.error || permRes.error || profileRes.error) {
       console.warn("[auth] profile load had errors, keeping session", {
@@ -157,7 +190,8 @@ export function useAuth() {
     setProfile(b.profile);
   }
 
-  function hydrate(userId: string) {
+function hydrate(authUser: User) {
+    const userId = authUser.id;
     // 1. instant: memory cache
     const mem = memCache.get(userId);
     if (mem) {
@@ -174,7 +208,7 @@ export function useAuth() {
     }
     // 3. background refresh
     setProfileLoading(true);
-    fetchProfileBundle(userId)
+    fetchProfileBundle(authUser)
       .then((b) => {
         if (b && lastUidRef.current === userId) applyBundle(b);
       })
@@ -193,7 +227,7 @@ export function useAuth() {
         if (lastUidRef.current !== sess.user.id) {
           lastUidRef.current = sess.user.id;
           setProfileLoading(true); // set synchronously to avoid race with route guards
-          setTimeout(() => hydrate(sess.user.id), 0);
+          setTimeout(() => hydrate(sess.user), 0);
         }
       } else {
         lastUidRef.current = null;
@@ -211,7 +245,7 @@ export function useAuth() {
       if (sess?.user && lastUidRef.current !== sess.user.id) {
         lastUidRef.current = sess.user.id;
         setProfileLoading(true);
-        hydrate(sess.user.id);
+        hydrate(sess.user);
       }
       setLoading(false);
     });
@@ -225,7 +259,7 @@ export function useAuth() {
     const refresh = () => {
       memCache.delete(user.id);
       clearLocal(user.id);
-      hydrate(user.id);
+      hydrate(user);
     };
     const channel = supabase
       .channel(`auth-profile-${user.id}-${Math.random().toString(36).slice(2)}`)
@@ -250,7 +284,7 @@ export function useAuth() {
     memCache.delete(user.id);
     clearLocal(user.id);
     setProfileLoading(true);
-    const b = await fetchProfileBundle(user.id);
+    const b = await fetchProfileBundle(user);
     if (b) applyBundle(b);
     setProfileLoading(false);
     if (typeof window !== "undefined") {
