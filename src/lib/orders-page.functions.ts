@@ -392,14 +392,14 @@ export const getOrderCountsPage = createServerFn({ method: "POST" })
     if (isStatementTimeout(error)) return { tabCountsData: emptyTabCountsData(), preorderDueCount: 0, timedOut: true };
     if (error) return { tabCountsData: emptyTabCountsData(), preorderDueCount: 0, error: error.message };
     const today = new Date().toISOString().slice(0, 10);
-    const { count, error: dueError } = await context.supabase.from("orders").select("id", { count: "planned", head: true }).eq("preorder", true).not("preorder_date", "is", null).lte("preorder_date", today);
+    const { count, error: dueError } = await context.supabase.from("orders").select("id", { count: "exact", head: true }).eq("preorder", true).not("preorder_date", "is", null).lte("preorder_date", today);
     const preorderDueCount = dueError && isStatementTimeout(dueError) ? 0 : (count ?? 0);
     // Sent-to-Partner tab: simple count + amount sum, respects the same common filters as the RPC inputs.
     let sentToPartnerBucket: { count: number; amount: number } = { count: 0, amount: 0 };
     try {
       let stp: any = context.supabase
         .from("orders")
-        .select("total_amount", { count: "planned" })
+        .select("total_amount", { count: "exact" })
         .not("forwarded_to_partner_at", "is", null);
       if (data.source && data.source !== "all") stp = stp.eq("order_source_id", data.source);
       if (data.site && data.site !== "all") stp = stp.eq("source_site_id", data.site);
