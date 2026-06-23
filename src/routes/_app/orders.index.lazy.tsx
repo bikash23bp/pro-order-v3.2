@@ -1405,6 +1405,8 @@ function OrdersPage() {
                     key={tab.key}
                     type="button"
                     onClick={() => selectOrderTab(tab.key)}
+                    onMouseEnter={() => prefetchOrderTab(tab.key)}
+                    onTouchStart={() => prefetchOrderTab(tab.key)}
                     className={cls}
                     data-tab-key={tab.key}
                     aria-pressed={active}
@@ -1441,6 +1443,8 @@ function OrdersPage() {
                     key={tab.key}
                     type="button"
                     onClick={() => selectOrderTab(tab.key)}
+                    onMouseEnter={() => prefetchOrderTab(tab.key)}
+                    onTouchStart={() => prefetchOrderTab(tab.key)}
                     className={`flex flex-col items-center justify-center rounded-md border-2 px-1.5 py-1 w-full min-w-0 shadow-sm transition-colors cursor-pointer select-none ${c.border} ${c.hover} ${active ? `${c.activeBg} ${c.activeText} shadow-md` : ""}`}
                     data-tab-key={tab.key}
                     aria-pressed={active}
