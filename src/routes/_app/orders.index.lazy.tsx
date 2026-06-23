@@ -165,6 +165,23 @@ type TabDef = {
   color: string;
 };
 
+function TickingNumber({ priming, value }: { priming: boolean; value: string }) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (!priming) return;
+    setN(0);
+    let cur = 0;
+    const id = window.setInterval(() => {
+      // small random step so the count climbs gradually & irregularly
+      cur += Math.floor(Math.random() * 4) + 1;
+      setN(cur);
+    }, 90 + Math.floor(Math.random() * 80));
+    return () => window.clearInterval(id);
+  }, [priming]);
+  if (priming) return <>{n.toLocaleString("en-IN")}</>;
+  return <>{value}</>;
+}
+
 const PRIMARY_TABS: TabDef[] = [
   { key: "processing",  label: "Processing",     color: "blue" },
   { key: "pending_web", label: "Web (Pending)", color: "orange" }, 
@@ -848,8 +865,8 @@ function OrdersPage() {
   };
   const countsPriming = !tabCountsData && !countsQuery.isError && (ordersQuery.isPending || countsQuery.isPending || countsQuery.isFetching || !countsQuery.data);
   const countsUnavailable = countsQuery.isError || (!countsPriming && !tabCountsData);
-  const fmtTabCount = (key: string) => countsPriming ? "…" : countsUnavailable ? "—" : (tabCounts[key] ?? 0).toLocaleString("en-IN");
-  const fmtTabAmount = (key: string) => countsPriming ? "৳ …" : countsUnavailable ? "৳ —" : `৳ ${fmtAmount(tabAmounts[key] ?? 0)}`;
+  const fmtTabCount = (key: string) => countsUnavailable ? "—" : (tabCounts[key] ?? 0).toLocaleString("en-IN");
+  const fmtTabAmount = (key: string) => countsUnavailable ? "৳ —" : `৳ ${fmtAmount(tabAmounts[key] ?? 0)}`;
 
   const todayISO = useMemo(() => {
     const d = new Date();
@@ -1419,7 +1436,7 @@ function OrdersPage() {
                     <span className="text-[10px] font-medium truncate w-full text-center">{activeTab?.label ?? "Select"}</span>
                     {activeTab && (
                       <>
-                        <span className="text-sm font-bold tabular-nums leading-tight">{fmtTabCount(activeTab.key)}</span>
+                        <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} value={fmtTabCount(activeTab.key)} /></span>
                         <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(activeTab.key)}</span>
                       </>
                     )}
@@ -1485,7 +1502,7 @@ function OrdersPage() {
                     aria-pressed={active}
                   >
                     <span className="text-[10px] font-medium truncate w-full text-center leading-tight">{tab.label}</span>
-                    <span className="text-sm font-bold tabular-nums leading-tight">{fmtTabCount(tab.key)}</span>
+                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} value={fmtTabCount(tab.key)} /></span>
                     <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(tab.key)}</span>
                   </button>
                 );
@@ -1500,7 +1517,7 @@ function OrdersPage() {
                     aria-pressed={active}
                   >
                     <span className="text-[10px] font-medium truncate w-full text-center leading-tight">{tab.label}</span>
-                    <span className="text-sm font-bold tabular-nums leading-tight">{fmtTabCount(tab.key)}</span>
+                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} value={fmtTabCount(tab.key)} /></span>
                     <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(tab.key)}</span>
                   </button>
                 );
@@ -1523,7 +1540,7 @@ function OrdersPage() {
                     aria-pressed={active}
                   >
                     <span className="text-[10px] font-semibold truncate w-full text-center leading-tight">{tab.label}</span>
-                    <span className="text-sm font-bold tabular-nums leading-tight">{fmtTabCount(tab.key)}</span>
+                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} value={fmtTabCount(tab.key)} /></span>
                     <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(tab.key)}</span>
                   </button>
                 );
