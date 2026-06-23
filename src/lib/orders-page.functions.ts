@@ -92,6 +92,17 @@ function aggregateTabCounts(rows: Array<{
   return { byStatus, all, web, facebook, partner, preorder };
 }
 
+function emptyTabCountsData() {
+  return {
+    byStatus: { incomplete: emptyBucket() },
+    all: emptyBucket(),
+    web: emptyBucket(),
+    facebook: emptyBucket(),
+    partner: emptyBucket(),
+    preorder: emptyBucket(),
+  };
+}
+
 function isRangeNotSatisfiable(error: {
   message?: string | null;
   details?: string | null;
@@ -420,9 +431,11 @@ export const getOrderCountsPage = createServerFn({ method: "POST" })
       p_allowed_oms: omsAllowed ?? null,
     };
     const { data: tabCountsData, error } = await (context.supabase as any).rpc("get_order_tab_counts_v2", countArgs);
-    if (error) throw new Error(error.message);
+    if (isStatementTimeout(error)) return { tabCountsData: emptyTabCountsData(), preorderDueCount: 0, timedOut: true };
+    if (error) return { tabCountsData: emptyTabCountsData(), preorderDueCount: 0, error: error.message };
     const today = new Date().toISOString().slice(0, 10);
-    const { count } = await context.supabase.from("orders").select("id", { count: "exact", head: true }).eq("preorder", true).not("preorder_date", "is", null).lte("preorder_date", today);
+    const { count, error: dueError } = await context.supabase.from("orders").select("id", { count: "planned", head: true }).eq("preorder", true).not("preorder_date", "is", null).lte("preorder_date", today);
+    const preorderDueCount = dueError && isStatementTimeout(dueError) ? 0 : (count ?? 0);
     const normalized = tabCountsData && typeof tabCountsData === "object"
       ? {
           ...(tabCountsData as Record<string, unknown>),
@@ -440,7 +453,7 @@ export const getOrderCountsPage = createServerFn({ method: "POST" })
           partner: { count: 0, amount: 0 },
           preorder: { count: 0, amount: 0 },
         };
-    return { tabCountsData: normalized, preorderDueCount: count ?? 0 };
+    return { tabCountsData: normalized, preorderDueCount };
   });
 
 export const getOrderFilterOptions = createServerFn({ method: "GET" })
