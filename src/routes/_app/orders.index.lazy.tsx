@@ -636,7 +636,7 @@ function OrdersPage() {
       typeof (window as any).requestIdleCallback === "function"
         ? (window as any).requestIdleCallback(cb, { timeout: 1500 })
         : window.setTimeout(cb, 250);
-    const warmTimers: ReturnType<typeof window.setTimeout>[] = [];
+    const warmTimers: number[] = [];
     idle(() => {
       const warmKeys = ["pending", "ready_order", "processing", "ready_to_ship", "shipped", "no_response", "hold"]
         .filter((k) => k !== effectiveStatusFilter);
