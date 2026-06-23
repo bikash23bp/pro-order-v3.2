@@ -201,6 +201,7 @@ function applyFilters(qb: any, data: z.infer<typeof OrdersInput>) {
   if (data.status === "facebook") return qb.eq("source", "facebook");
   if (data.status === "partner") return qb.eq("source", "oms");
   if (data.status === "preorder") return qb.eq("preorder", true);
+  if (data.status === "sent_to_partner") return qb.not("forwarded_to_partner_at", "is", null);
   if (data.status === "all") return qb;
 
   // "pending" এখন স্বাধীন স্ট্যাটাস — শুধু status=pending
