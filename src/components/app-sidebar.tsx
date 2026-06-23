@@ -34,7 +34,7 @@ const entries: SidebarEntry[] = [
     title: "Orders",
     icon: ShoppingCart,
     children: [
-      { title: "All Orders", url: "/orders", icon: ClipboardList },
+      { title: "All Orders", url: "/orders?status=pending", icon: ClipboardList },
       { title: "Pre-Orders", url: "/orders?status=preorder", icon: Clock },
       { title: "Web Orders", url: "/orders?status=web", icon: Globe },
       { title: "Incomplete Orders", url: "/orders?status=incomplete", icon: AlertCircle },
