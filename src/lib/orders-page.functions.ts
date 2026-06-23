@@ -113,9 +113,6 @@ function isMissingForwardedColumn(error: { message?: string | null; details?: st
 }
 
 async function getAllowedOmsSenders(ctx: { supabase: any; userId: string }): Promise<string[] | null> {
-  const cached = OMS_ACCESS_CACHE.get(ctx.userId);
-  const now = Date.now();
-  if (cached && cached.expires > now) return cached.value;
   const [rolesRes, profileRes, accessRes] = await Promise.all([
     ctx.supabase
       .from("user_roles")
@@ -130,17 +127,18 @@ async function getAllowedOmsSenders(ctx: { supabase: any; userId: string }): Pro
   if (roles.has("admin") || roles.has("business_owner")) value = null;
   else if ((profileRes.data?.permissions as any)?.can_view_all_orders) value = null;
   else value = ((accessRes.data ?? []) as { sender_name: string }[]).map((r) => r.sender_name);
-  OMS_ACCESS_CACHE.set(ctx.userId, { value, expires: now + OMS_ACCESS_TTL_MS });
   return value;
 }
-
-const OMS_ACCESS_TTL_MS = 60_000;
-const OMS_ACCESS_CACHE = new Map<string, { value: string[] | null; expires: number }>();
 
 function applyOmsAccessFilter(qb: any, allowed: string[] | null) {
   if (allowed === null) return qb;
   if (allowed.length === 0) return qb.neq("source", "oms");
-  const list = allowed.map((s) => `"${String(s).replace(/"/g, '\\"')}"`).join(",");
+  // Sender names can contain commas/parentheses which break PostgREST's .or() syntax.
+  // Use a positive OR with native .in() filter chained via `or` raw is unsafe → split into two queries.
+  // Safe encoding: percent-encode every reserved PostgREST char then wrap in double quotes.
+  const encode = (s: string) =>
+    `"${String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/,/g, "\\,").replace(/[()]/g, (c) => `\\${c}`)}"`;
+  const list = allowed.map(encode).join(",");
   return qb.or(`source.neq.oms,oms_sender_name.in.(${list})`);
 }
 
