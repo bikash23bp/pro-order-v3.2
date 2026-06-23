@@ -3,6 +3,22 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const REVENUE_STATUSES = new Set(["processing", "ready_to_ship", "shipped", "completed"]);
+const WEBSITE_ORDER_SOURCES = new Set(["web", "woocommerce"]);
+
+function normalizeSource(source: string | null | undefined): string {
+  return (source || "").toLowerCase();
+}
+
+function isWebsiteOrder(source: string | null | undefined): boolean {
+  return WEBSITE_ORDER_SOURCES.has(normalizeSource(source));
+}
+
+function sourceLabel(source: string): string {
+  if (source === "woocommerce") return "WooCommerce";
+  if (source === "web") return "Web";
+  if (!source) return "Unknown Source";
+  return source.charAt(0).toUpperCase() + source.slice(1);
+}
 
 function normalizePhone(p: string | null | undefined): string | null {
   const digits = (p || "").replace(/\D/g, "");
@@ -120,9 +136,10 @@ export const getStaffReport = createServerFn({ method: "POST" })
       let row = rowMap.get(uid);
       if (!row) {
         let name: string;
-        if (uid === "unassigned") name = "Webhook (Unknown site)";
+        if (uid === "unassigned") name = "Unknown Staff";
         else if (uid.startsWith("site:")) name = siteMap.get(uid.slice(5)) ?? "Website";
-        else name = profileMap.get(uid) ?? "Unassigned / Webhook";
+        else if (uid.startsWith("source:")) name = `${sourceLabel(uid.slice(7))} (Unknown website)`;
+        else name = profileMap.get(uid) ?? "Unknown Staff";
         row = {
           user_id: uid,
           name,
@@ -141,7 +158,11 @@ export const getStaffReport = createServerFn({ method: "POST" })
 
     for (const o of orders) {
       let uid: string;
-      if (o.created_by) {
+      if (isWebsiteOrder(o.source) && o.source_site_id) {
+        uid = `site:${o.source_site_id}`;
+      } else if (isWebsiteOrder(o.source)) {
+        uid = `source:${normalizeSource(o.source)}`;
+      } else if (o.created_by) {
         uid = o.created_by;
       } else if (o.source_site_id) {
         uid = `site:${o.source_site_id}`;
@@ -155,7 +176,7 @@ export const getStaffReport = createServerFn({ method: "POST" })
       row.total_orders += 1;
       if (isRevenue) row.total_amount += amt;
 
-      const src = (o.source || "manual").toLowerCase();
+      const src = normalizeSource(o.source) || "manual";
       if (src === "manual") row.manual_count += 1;
       else if (src === "web" || src === "woocommerce") {
         row.web_count += 1;
@@ -171,9 +192,11 @@ export const getStaffReport = createServerFn({ method: "POST" })
         if (isRevenue) row.telesales_amount += amt;
       }
 
-      // by_source breakdown (using order_source_id, falling back to source label)
-      const sid = o.order_source_id ?? `__src_${src}`;
-      const sname = o.order_source_id ? (sourceMap.get(o.order_source_id) ?? "Unknown") : src;
+      // by_source breakdown: website orders must show the website name, not a webhook bucket.
+      const sid = o.source_site_id ? `site:${o.source_site_id}` : (o.order_source_id ?? `__src_${src}`);
+      const sname = o.source_site_id
+        ? (siteMap.get(o.source_site_id) ?? "Website")
+        : (o.order_source_id ? (sourceMap.get(o.order_source_id) ?? "Unknown") : sourceLabel(src));
       let m = bySourceAcc.get(uid);
       if (!m) { m = new Map(); bySourceAcc.set(uid, m); }
       let entry = m.get(sid);
