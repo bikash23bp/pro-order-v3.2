@@ -1524,20 +1524,6 @@ function OrdersPage() {
                     onMouseEnter={() => prefetchOrderTab(tab.key)}
                     onTouchStart={() => prefetchOrderTab(tab.key)}
                     className={cls}
-                    data-tab-key={tab.key}
-                    aria-pressed={active}
-                  >
-                    <span className="text-[10px] font-medium truncate w-full text-center leading-tight">{tab.label}</span>
-                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} target={tabCounts[tab.key] ?? 0} unavailable={countsUnavailable} /></span>
-                    <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(tab.key)}</span>
-                  </button>
-                );
-                return (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    onClick={() => selectOrderTab(tab.key)}
-                    className={cls}
                     title={isPreorderAlert ? `${preorderDueCount} pre-order(s) due today or overdue` : undefined}
                     data-tab-key={tab.key}
                     aria-pressed={active}
