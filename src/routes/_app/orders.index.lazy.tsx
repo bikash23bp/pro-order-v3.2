@@ -847,8 +847,8 @@ function OrdersPage() {
     if (n >= 100000) return `${(n / 1000).toFixed(0)}k`;
     return Math.round(n).toLocaleString("en-IN");
   };
-  const countsPriming = !tabCountsData && (ordersQuery.isPending || countsQuery.isPending || countsQuery.isFetching || !countsQuery.data);
-  const countsUnavailable = !countsPriming && (countsQuery.isError || !tabCountsData);
+  const countsPriming = !tabCountsData && !countsQuery.isError && (ordersQuery.isPending || countsQuery.isPending || countsQuery.isFetching || !countsQuery.data);
+  const countsUnavailable = countsQuery.isError || (!countsPriming && !tabCountsData);
   const fmtTabCount = (key: string) => countsPriming ? "…" : countsUnavailable ? "—" : (tabCounts[key] ?? 0).toLocaleString("en-IN");
   const fmtTabAmount = (key: string) => countsPriming ? "৳ …" : countsUnavailable ? "৳ —" : `৳ ${fmtAmount(tabAmounts[key] ?? 0)}`;
 
@@ -1614,7 +1614,7 @@ function OrdersPage() {
               {selected.size > 0 ? `${selected.size} selected` : "Select all"}
             </span>
             <span className="ml-auto text-muted-foreground hidden sm:inline">
-              {totalCount} order{totalCount === 1 ? "" : "s"}{refreshing ? " · refreshing" : ""}
+              {loading ? "Loading orders…" : `${totalCount} order${totalCount === 1 ? "" : "s"}${refreshing ? " · refreshing" : ""}`}
             </span>
           </div>
 
