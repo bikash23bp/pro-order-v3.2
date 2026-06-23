@@ -104,7 +104,6 @@ function isRangeNotSatisfiable(error: {
 
 async function getAllowedOmsSenders(ctx: { supabase: any; userId: string }): Promise<string[] | null> {
   const cached = OMS_ACCESS_CACHE.get(ctx.userId);
-  const cached = OMS_ACCESS_CACHE.get(ctx.userId);
   const now = Date.now();
   if (cached && cached.expires > now) return cached.value;
   const [rolesRes, profileRes, accessRes] = await Promise.all([
@@ -124,6 +123,9 @@ async function getAllowedOmsSenders(ctx: { supabase: any; userId: string }): Pro
   OMS_ACCESS_CACHE.set(ctx.userId, { value, expires: now + OMS_ACCESS_TTL_MS });
   return value;
 }
+
+const OMS_ACCESS_TTL_MS = 60_000;
+const OMS_ACCESS_CACHE = new Map<string, { value: string[] | null; expires: number }>();
 
 function applyOmsAccessFilter(qb: any, allowed: string[] | null) {
   if (allowed === null) return qb;
