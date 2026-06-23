@@ -211,6 +211,7 @@ const PRIMARY_TABS: TabDef[] = [
   { key: "preorder",    label: "Pre-Orders",     color: "violet" },
   { key: "hold",        label: "Hold",           color: "amber" },
   { key: "fraud",       label: "Fraud",          color: "red" },
+  { key: "sent_to_partner", label: "Sent to Partner", color: "teal" },
   { key: "all",         label: "All",            color: "slate" },
 ];
 
@@ -832,6 +833,7 @@ function OrdersPage() {
     if (tab === "facebook") return r.source === "facebook";
     if (tab === "partner") return r.source === "oms";
     if (tab === "preorder") return !!r.preorder;
+    if (tab === "sent_to_partner") return !!(r as { forwarded_to_partner_at?: string | null }).forwarded_to_partner_at;
     return r.status === tab;
   };
 
@@ -859,6 +861,7 @@ function OrdersPage() {
       else if (tab.key === "facebook") out[tab.key] = tabCountsData?.facebook?.count ?? 0;
       else if (tab.key === "partner") out[tab.key] = tabCountsData?.partner?.count ?? 0;
       else if (tab.key === "preorder") out[tab.key] = tabCountsData?.preorder?.count ?? 0;
+      else if (tab.key === "sent_to_partner") out[tab.key] = (tabCountsData as any)?.sent_to_partner?.count ?? 0;
       else out[tab.key] = bs[tab.key]?.count ?? 0;
     }
     return out;
@@ -873,6 +876,7 @@ function OrdersPage() {
       else if (tab.key === "facebook") out[tab.key] = Number(tabCountsData?.facebook?.amount ?? 0);
       else if (tab.key === "partner") out[tab.key] = Number(tabCountsData?.partner?.amount ?? 0);
       else if (tab.key === "preorder") out[tab.key] = Number(tabCountsData?.preorder?.amount ?? 0);
+      else if (tab.key === "sent_to_partner") out[tab.key] = Number((tabCountsData as any)?.sent_to_partner?.amount ?? 0);
       else out[tab.key] = Number(bs[tab.key]?.amount ?? 0);
     }
     return out;

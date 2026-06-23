@@ -1336,6 +1336,7 @@ export type Database = {
           delivery_method: string | null
           discount_amount: number
           external_order_id: string | null
+          forwarded_to_partner_at: string | null
           id: string
           internal_note: string | null
           invoice_note: string | null
@@ -1376,6 +1377,7 @@ export type Database = {
           delivery_method?: string | null
           discount_amount?: number
           external_order_id?: string | null
+          forwarded_to_partner_at?: string | null
           id?: string
           internal_note?: string | null
           invoice_note?: string | null
@@ -1416,6 +1418,7 @@ export type Database = {
           delivery_method?: string | null
           discount_amount?: number
           external_order_id?: string | null
+          forwarded_to_partner_at?: string | null
           id?: string
           internal_note?: string | null
           invoice_note?: string | null
@@ -3045,6 +3048,7 @@ export type Database = {
           delivery_method: string | null
           discount_amount: number
           external_order_id: string | null
+          forwarded_to_partner_at: string | null
           id: string
           internal_note: string | null
           invoice_note: string | null
@@ -3432,6 +3436,7 @@ export type Database = {
           delivery_method: string | null
           discount_amount: number
           external_order_id: string | null
+          forwarded_to_partner_at: string | null
           id: string
           internal_note: string | null
           invoice_note: string | null
