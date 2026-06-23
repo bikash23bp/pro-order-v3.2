@@ -196,7 +196,10 @@ const TAB_STATUSES: TabDef[] = [
   ...PIPELINE_TABS,
 ];
 
-const ORDER_LIST_STALE_MS = 30_000;
+// Aggressive client cache: switching between tabs/pages within this window
+// reuses cached rows instantly with zero network round-trips. Mutations and
+// realtime events still invalidate the cache, so freshness isn't sacrificed.
+const ORDER_LIST_STALE_MS = 5 * 60_000;
 const ORDER_LIST_GC_MS = 30 * 60_000;
 const transientOrderLoadRetry = (failureCount: number, error: unknown) => {
   const message = error instanceof Error ? error.message : String(error ?? "");
@@ -612,6 +615,28 @@ function OrdersPage() {
     if (ordersQuery.error) toast.error((ordersQuery.error as Error).message);
   }, [ordersQuery.error]);
 
+  // Background-warm the other primary tabs after the first paint so clicking
+  // them feels instant. Runs once per filter-set; respects the same stale window.
+  const warmedFiltersRef = useRef<string>("");
+  useEffect(() => {
+    if (!session || ordersQuery.isPending || !ordersQuery.data) return;
+    const sig = JSON.stringify({ sourceFilter, siteFilter, courierFilter, partnerFilter, staffFilter, datePreset, fromIso, toIso, debouncedQ, tagPhoneFilter, advanceOnly });
+    if (warmedFiltersRef.current === sig) return;
+    warmedFiltersRef.current = sig;
+    const idle = (cb: () => void) =>
+      typeof (window as any).requestIdleCallback === "function"
+        ? (window as any).requestIdleCallback(cb, { timeout: 1500 })
+        : window.setTimeout(cb, 250);
+    idle(() => {
+      const warmKeys = ["pending", "ready_order", "processing", "ready_to_ship", "shipped", "no_response", "hold"];
+      for (const k of warmKeys) {
+        if (k === effectiveStatusFilter) continue;
+        prefetchOrderTab(k);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, ordersQuery.isPending, ordersQuery.data, sourceFilter, siteFilter, courierFilter, partnerFilter, staffFilter, datePreset, fromIso, toIso, debouncedQ, tagPhoneFilter, advanceOnly]);
+
   // Blocked phone lookup — only for visible page (~10 phones).
   // Key on a stable join of phones so realtime refreshes of the same page don't refetch.
   const visiblePhonesKey = useMemo(
@@ -647,8 +672,8 @@ function OrdersPage() {
   const countsQuery = useQuery({
     queryKey: countsQueryKey,
     enabled: !!session,
-    staleTime: 30_000,
-    gcTime: 5 * 60_000,
+    staleTime: 2 * 60_000,
+    gcTime: 10 * 60_000,
     refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
     retry: transientOrderLoadRetry,
