@@ -196,7 +196,10 @@ const TAB_STATUSES: TabDef[] = [
   ...PIPELINE_TABS,
 ];
 
-const ORDER_LIST_STALE_MS = 30_000;
+// Aggressive client cache: switching between tabs/pages within this window
+// reuses cached rows instantly with zero network round-trips. Mutations and
+// realtime events still invalidate the cache, so freshness isn't sacrificed.
+const ORDER_LIST_STALE_MS = 5 * 60_000;
 const ORDER_LIST_GC_MS = 30 * 60_000;
 const transientOrderLoadRetry = (failureCount: number, error: unknown) => {
   const message = error instanceof Error ? error.message : String(error ?? "");
