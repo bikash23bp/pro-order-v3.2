@@ -7,7 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export type DateRange = { from: Date; to: Date };
-export type PresetKey = "all" | "today" | "yesterday" | "week" | "month" | "year" | "custom";
+export type PresetKey = "all" | "today" | "yesterday" | "week" | "month" | "year" | "last365" | "custom";
 
 export function startOfDay(d: Date): Date {
   const x = new Date(d);
@@ -42,6 +42,11 @@ export function presetRange(p: PresetKey): DateRange {
       return { from: startOfDay(new Date(now.getFullYear(), now.getMonth(), 1)), to: endOfDay(now) };
     case "year":
       return { from: startOfDay(new Date(now.getFullYear(), 0, 1)), to: endOfDay(now) };
+    case "last365": {
+      const start = new Date(now);
+      start.setDate(now.getDate() - 364);
+      return { from: startOfDay(start), to: endOfDay(now) };
+    }
     default:
       return { from: startOfDay(now), to: endOfDay(now) };
   }
@@ -54,6 +59,7 @@ const PRESETS: { key: PresetKey; label: string }[] = [
   { key: "week", label: "This Week" },
   { key: "month", label: "This Month" },
   { key: "year", label: "This Year" },
+  { key: "last365", label: "Last 1 Year" },
 ];
 
 export function DateRangeFilter({
