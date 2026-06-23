@@ -252,9 +252,6 @@ const isMainAdmin = (email: string | null) => (email ?? "").toLowerCase() === MA
               Status: r.is_blocked ? "Blocked" : r.pending ? "Pending" : "Active",
             }))}
           />
-          <Button asChild variant="outline" size="sm">
-            <Link to="/new-user-requests"><UserPlus2 className="h-4 w-4" /> New User Requests</Link>
-          </Button>
           <AddUserDialog onCreated={load} />
         </div>
       </div>
