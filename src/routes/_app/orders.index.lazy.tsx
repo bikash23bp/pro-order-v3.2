@@ -172,25 +172,26 @@ function TickingNumber({ priming, target, unavailable }: { priming: boolean; tar
     if (unavailable) return;
 
     if (priming) {
-      setN(0);
-      let cur = 0;
-      const id = window.setInterval(() => {
-        cur += Math.floor(Math.random() * 4) + 1;
-        setN(cur);
-      }, 90 + Math.floor(Math.random() * 80));
-      return () => window.clearInterval(id);
+      // Target এখনো জানা নাই — overshoot এড়াতে কিছু animate করবো না।
+      return;
     }
 
     const id = window.setInterval(() => {
       setN((prev) => {
-        const current = prev > target ? 0 : prev;
+        // target পরিবর্তিত হলে কখনো overshoot দেখাবো না — সরাসরি target-এ snap।
+        if (prev > target) {
+          window.clearInterval(id);
+          return target;
+        }
+        const current = prev;
         const remaining = target - current;
         if (remaining <= 0) {
           window.clearInterval(id);
           return target;
         }
         const maxStep = Math.max(1, Math.ceil(remaining / 8));
-        return current + Math.min(remaining, Math.floor(Math.random() * maxStep) + 1);
+        const step = Math.min(remaining, Math.floor(Math.random() * maxStep) + 1);
+        return current + step;
       });
     }, 55 + Math.floor(Math.random() * 45));
 
@@ -198,6 +199,7 @@ function TickingNumber({ priming, target, unavailable }: { priming: boolean; tar
   }, [priming, target, unavailable]);
 
   if (unavailable) return <>—</>;
+  if (priming) return <>…</>;
   return <>{n.toLocaleString("en-IN")}</>;
 }
 
