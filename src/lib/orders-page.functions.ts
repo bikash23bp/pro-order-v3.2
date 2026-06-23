@@ -335,6 +335,7 @@ export const listOrdersPage = createServerFn({ method: "POST" })
         data.page = 1;
         error = null as any;
       }
+      if (isStatementTimeout(error)) return { rows: [], totalCount: 0, currentPage: data.page, timedOut: true };
       if (error) throw new Error(error.message);
       const orders = rows ?? [];
 
@@ -368,6 +369,7 @@ export const listOrdersPage = createServerFn({ method: "POST" })
       data.page = 1;
       error = null as any;
     }
+    if (isStatementTimeout(error)) return { rows: [], totalCount: 0, currentPage: data.page, timedOut: true };
     if (error) throw new Error(error.message);
 
     const orders = rows ?? [];
