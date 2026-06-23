@@ -130,26 +130,27 @@ export const Route = createFileRoute("/api/public/oms-inbound")({
           return json(500, { ok: false, error: cErr?.message || "Failed to create order" });
         }
 
-        // Resolve items: prefer SKU match, else create lightweight placeholder products.
+        // Batch-resolve all SKUs and names up front to avoid N round-trips per item.
+        const skus = Array.from(new Set(body.items.map((i) => i.sku).filter(Boolean))) as string[];
+        const names = Array.from(new Set(body.items.map((i) => i.product_name).filter(Boolean))) as string[];
+        const [skuRes, nameRes] = await Promise.all([
+          skus.length
+            ? (supabaseAdmin as any).from("products").select("id, sku").in("sku", skus)
+            : Promise.resolve({ data: [] as { id: string; sku: string }[] }),
+          names.length
+            ? (supabaseAdmin as any).from("products").select("id, name").in("name", names)
+            : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+        ]);
+        const bySku = new Map<string, string>(
+          ((skuRes.data ?? []) as { id: string; sku: string }[]).map((p) => [p.sku, p.id]),
+        );
+        const byName = new Map<string, string>(
+          ((nameRes.data ?? []) as { id: string; name: string }[]).map((p) => [p.name, p.id]),
+        );
+
         const itemsToInsert: Array<{ order_id: string; product_id: string; quantity: number; unit_price: number }> = [];
         for (const it of body.items) {
-          let productId: string | null = null;
-          if (it.sku) {
-            const { data: p } = await (supabaseAdmin as any)
-              .from("products")
-              .select("id")
-              .eq("sku", it.sku)
-              .maybeSingle();
-            if (p?.id) productId = p.id as string;
-          }
-          if (!productId) {
-            const { data: byName } = await (supabaseAdmin as any)
-              .from("products")
-              .select("id")
-              .eq("name", it.product_name)
-              .maybeSingle();
-            if (byName?.id) productId = byName.id as string;
-          }
+          let productId: string | null = (it.sku && bySku.get(it.sku)) || byName.get(it.product_name) || null;
           if (!productId) {
             const { data: newProd, error: npErr } = await (supabaseAdmin as any)
               .from("products")
@@ -165,6 +166,8 @@ export const Route = createFileRoute("/api/public/oms-inbound")({
               continue;
             }
             productId = newProd.id as string;
+            if (it.sku) bySku.set(it.sku, productId);
+            byName.set(it.product_name, productId);
           }
           itemsToInsert.push({
             order_id: created.id,

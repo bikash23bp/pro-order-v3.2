@@ -1,6 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createHmac, timingSafeEqual } from "crypto";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+async function getAdmin() {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  return supabaseAdmin;
+}
 import { serializeUnmatchedBlock, writeUnmatchedToNote, type WebUnmatchedItem } from "@/lib/web-unmatched";
 
 type WooLineItem = {
@@ -88,7 +91,7 @@ type LogInput = {
 
 async function logWebhook(input: LogInput) {
   try {
-    await supabaseAdmin.from("webhook_logs").insert({
+    await (await getAdmin()).from("webhook_logs").insert({
       provider: "woocommerce",
       status: input.status,
       http_status: input.http_status,
@@ -198,7 +201,7 @@ export const Route = createFileRoute("/api/public/webhooks/woocommerce")({
           consumer_key: string | null;
           consumer_secret: string | null;
         };
-        const { data: integrations } = await supabaseAdmin
+        const { data: integrations } = await (await getAdmin())
           .from("integrations")
           .select("id, webhook_secret, enabled, site_url, consumer_key, consumer_secret")
           .eq("provider", "woocommerce")
@@ -278,7 +281,7 @@ export const Route = createFileRoute("/api/public/webhooks/woocommerce")({
 
         const [externalRefsResult, productsBySkuResult, productsByNameResult] = await Promise.all([
           productIds.length
-            ? supabaseAdmin
+            ? (await getAdmin())
                 .from("product_external_refs")
                 .select("product_id, external_product_id, external_variant_id")
                 .eq("source", "woocommerce")
@@ -289,13 +292,13 @@ export const Route = createFileRoute("/api/public/webhooks/woocommerce")({
                 error: null,
               }),
           allSkus.length
-            ? supabaseAdmin.from("products").select("id, name, sku").in("sku", allSkus)
+            ? (await getAdmin()).from("products").select("id, name, sku").in("sku", allSkus)
             : Promise.resolve({
                 data: [] as { id: string; name: string; sku: string | null }[],
                 error: null,
               }),
           namesLower.length
-            ? supabaseAdmin.from("products").select("id, name, sku").in("name", names)
+            ? (await getAdmin()).from("products").select("id, name, sku").in("name", names)
             : Promise.resolve({
                 data: [] as { id: string; name: string; sku: string | null }[],
                 error: null,
@@ -327,17 +330,17 @@ export const Route = createFileRoute("/api/public/webhooks/woocommerce")({
           const price = Number(wp.price || wp.regular_price || li.price || 0);
           const stock = wp.manage_stock ? Number(wp.stock_quantity ?? 0) : 0;
           const image_url = wp.images?.[0]?.src ?? null;
-          const { data: existingProduct } = await supabaseAdmin.from("products").select("id").eq("sku", sku).maybeSingle();
+          const { data: existingProduct } = await (await getAdmin()).from("products").select("id").eq("sku", sku).maybeSingle();
           let productId = existingProduct?.id;
           if (productId) {
-            await supabaseAdmin.from("products").update({ name: wp.name || li.name, description: wp.description ?? null, price, stock_quantity: stock, image_url, status: wp.status === "publish" ? "active" : "inactive" }).eq("id", productId);
+            await (await getAdmin()).from("products").update({ name: wp.name || li.name, description: wp.description ?? null, price, stock_quantity: stock, image_url, status: wp.status === "publish" ? "active" : "inactive" }).eq("id", productId);
           } else {
-            const { data: inserted } = await supabaseAdmin.from("products").insert({ name: wp.name || li.name, description: wp.description ?? null, sku, price, cost_price: 0, stock_quantity: stock, image_url, status: wp.status === "publish" ? "active" : "inactive" }).select("id").single();
+            const { data: inserted } = await (await getAdmin()).from("products").insert({ name: wp.name || li.name, description: wp.description ?? null, sku, price, cost_price: 0, stock_quantity: stock, image_url, status: wp.status === "publish" ? "active" : "inactive" }).select("id").single();
             productId = inserted?.id;
           }
           if (!productId) return undefined;
           const rows = ["", li.variation_id ? String(li.variation_id) : ""].filter((v, i, arr) => arr.indexOf(v) === i).map((variationId) => ({ product_id: productId, source: "woocommerce", source_site_id: sourceSiteId, external_product_id: String(li.product_id), external_variant_id: variationId }));
-          await supabaseAdmin.from("product_external_refs").upsert(rows, { onConflict: "source,source_site_id,external_product_id,external_variant_id" });
+          await (await getAdmin()).from("product_external_refs").upsert(rows, { onConflict: "source,source_site_id,external_product_id,external_variant_id" });
           byExternal.set(`${li.product_id}:`, productId);
           if (li.variation_id) byExternal.set(`${li.product_id}:${li.variation_id}`, productId);
           bySku.set(sku, productId);
@@ -396,14 +399,14 @@ export const Route = createFileRoute("/api/public/webhooks/woocommerce")({
         // Read existing internal_note (if any) so we can preserve user text
         // and only rewrite the unmatched block. Then hand everything to a
         // single atomic RPC so order + items succeed or fail together.
-        const { data: existing } = await supabaseAdmin
+        const { data: existing } = await (await getAdmin())
           .from("orders")
           .select("id, internal_note")
           .eq("source", "woocommerce")
           .eq("external_order_id", externalId)
           .maybeSingle();
 
-        const { data: webSource } = await supabaseAdmin
+        const { data: webSource } = await (await getAdmin())
           .from("order_sources")
           .select("id")
           .eq("name", "Web")
@@ -421,7 +424,7 @@ export const Route = createFileRoute("/api/public/webhooks/woocommerce")({
           unit_price: v.unit_price,
         }));
 
-        const { data: rpcRows, error: rpcErr } = await supabaseAdmin.rpc(
+        const { data: rpcRows, error: rpcErr } = await (await getAdmin()).rpc(
           "upsert_woo_order_with_items",
           {
             p_external_id: externalId,
