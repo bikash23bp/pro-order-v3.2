@@ -560,6 +560,32 @@ function OrdersPage() {
     navigate({ to: "/orders", search: (prev: { status?: string; page?: number; limit?: number }) => ({ ...prev, status, page: 1 }) });
   };
 
+  // Warm the cache for a tab on hover/mousedown so click feels instant.
+  const prefetchOrderTab = (status: string) => {
+    if (!session) return;
+    const key = [
+      "orders", "list",
+      { status, page: 1, limit, source: sourceFilter, site: siteFilter, courier: courierFilter,
+        partner: partnerFilter, staff: staffFilter,
+        preset: datePreset, from: fromIso, to: toIso, q: debouncedQ, tagPhones: tagPhoneFilter,
+        advanceOnly },
+    ];
+    queryClient.prefetchQuery({
+      queryKey: key,
+      staleTime: ORDER_LIST_STALE_MS,
+      queryFn: async () => listOrders({ data: {
+        status, page: 1, limit,
+        source: sourceFilter, site: siteFilter, courier: courierFilter,
+        partner: partnerFilter, staff: staffFilter,
+        from: datePreset === "all" ? null : fromIso,
+        to: datePreset === "all" ? null : toIso,
+        q: debouncedQ,
+        tagPhones: tagPhoneFilter,
+        advanceOnly,
+      } }),
+    }).catch(() => {});
+  };
+
   const rows: Order[] = ordersQuery.data?.rows ?? [];
   const totalCount = ordersQuery.data?.totalCount ?? 0;
   const serverPage = ordersQuery.data?.currentPage ?? page;
