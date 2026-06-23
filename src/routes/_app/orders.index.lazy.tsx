@@ -299,7 +299,7 @@ function OrdersPage() {
   const queryClient = useQueryClient();
   const [importOpen, setImportOpen] = useState(false);
   const [q, setQ] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>(search.dup ? "all" : (search.status ?? "processing"));
+  const [statusFilter, setStatusFilter] = useState<string>(search.dup ? "all" : (search.status ?? "all"));
   const [tabsOpen, setTabsOpen] = useState(false);
   const page = Math.max(1, search.page ?? 1);
   const limit = [10, 25, 50, 100].includes(search.limit ?? 10) ? (search.limit ?? 10) : 10;
@@ -431,7 +431,7 @@ function OrdersPage() {
   }, [session, tagFilter, fetchTagsMap]);
 
   useEffect(() => {
-    setStatusFilter(search.dup ? "all" : (search.status ?? "processing"));
+    setStatusFilter(search.dup ? "all" : (search.status ?? "all"));
     setHasManualStatusSelection(false);
   }, [search.status, search.dup]);
 

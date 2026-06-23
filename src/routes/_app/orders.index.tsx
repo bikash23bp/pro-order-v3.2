@@ -3,7 +3,7 @@ import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
 const defaultOrdersSearch = {
-  status: "processing",
+  status: "all",
   page: 1,
   limit: 10,
   source: "all",
