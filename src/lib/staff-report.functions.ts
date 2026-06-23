@@ -119,9 +119,13 @@ export const getStaffReport = createServerFn({ method: "POST" })
     const ensure = (uid: string): StaffReportRow => {
       let row = rowMap.get(uid);
       if (!row) {
+        let name: string;
+        if (uid === "unassigned") name = "Webhook (Unknown site)";
+        else if (uid.startsWith("site:")) name = siteMap.get(uid.slice(5)) ?? "Website";
+        else name = profileMap.get(uid) ?? "Unassigned / Webhook";
         row = {
           user_id: uid,
-          name: profileMap.get(uid) ?? "Unassigned / Webhook",
+          name,
           total_orders: 0, total_amount: 0,
           manual_count: 0, web_count: 0, web_confirmed_count: 0,
           facebook_count: 0, other_count: 0,
