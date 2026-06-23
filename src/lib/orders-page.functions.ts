@@ -252,7 +252,7 @@ async function enrichOrdersForList(context: any, orders: any[]) {
   ]));
   const siteIds = Array.from(new Set(orders.map((o: any) => o.source_site_id).filter(Boolean))) as string[];
 
-  const [profileRes, siteRes, itemsRes, flagMap] = await Promise.all([
+  const [profileRes, siteRes, itemsRes] = await Promise.all([
     userIds.length
       ? context.supabase.from("profiles").select("id, full_name, email").in("id", userIds)
       : Promise.resolve({ data: [] }),
@@ -265,7 +265,6 @@ async function enrichOrdersForList(context: any, orders: any[]) {
           .select("order_id, quantity, unit_price, products(name), product_variants(attributes)")
           .in("order_id", orderIds)
       : Promise.resolve({ data: [] }),
-    getVisibleOrderFlags(context.supabase, orders),
   ]);
 
   const profileMap = Object.fromEntries((profileRes.data ?? []).map((p: any) => [
@@ -296,7 +295,8 @@ async function enrichOrdersForList(context: any, orders: any[]) {
     creator: o.created_by ? (profileMap[o.created_by] ?? null) : null,
     editor: o.updated_by ? (profileMap[o.updated_by] ?? null) : null,
     site_name: o.source_site_id ? (siteMap[o.source_site_id] ?? null) : null,
-    customer_flags: flagMap[o.id] ?? { is_vip: false, is_repeat: false, is_duplicate: false, returned_count: 0 },
+    // customer_flags is fetched separately by the client so the main list returns instantly.
+    customer_flags: null,
   }));
 }
 
@@ -466,6 +466,33 @@ export const getOrderFilterOptions = createServerFn({ method: "GET" })
 
 const EXPORT_CHUNK = 1000;
 const EXPORT_SAFETY_CAP = 500_000;
+
+const FlagInput = z.object({
+  orders: z
+    .array(
+      z.object({
+        id: z.string(),
+        phone: z.string().nullable().optional(),
+        email: z.string().nullable().optional(),
+        status: z.string().nullable().optional(),
+      }),
+    )
+    .max(200),
+});
+
+export const getOrderListFlags = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => FlagInput.parse(input ?? { orders: [] }))
+  .handler(async ({ data, context }) => {
+    if (!data.orders.length) return {} as Record<string, { is_vip: boolean; is_repeat: boolean; is_duplicate: boolean; returned_count: number }>;
+    const flat = data.orders.map((o) => ({
+      id: o.id,
+      customer_phone: o.phone ?? "",
+      customer_email: o.email ?? "",
+      status: o.status ?? "",
+    }));
+    return await getVisibleOrderFlags(context.supabase, flat);
+  });
 
 async function fetchAllByIds(supabase: any, ids: string[], selectCols: string) {
   const out: any[] = [];
