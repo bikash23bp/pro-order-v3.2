@@ -165,21 +165,40 @@ type TabDef = {
   color: string;
 };
 
-function TickingNumber({ priming, value }: { priming: boolean; value: string }) {
+function TickingNumber({ priming, target, unavailable }: { priming: boolean; target: number; unavailable: boolean }) {
   const [n, setN] = useState(0);
+
   useEffect(() => {
-    if (!priming) return;
-    setN(0);
-    let cur = 0;
+    if (unavailable) return;
+
+    if (priming) {
+      setN(0);
+      let cur = 0;
+      const id = window.setInterval(() => {
+        cur += Math.floor(Math.random() * 4) + 1;
+        setN(cur);
+      }, 90 + Math.floor(Math.random() * 80));
+      return () => window.clearInterval(id);
+    }
+
     const id = window.setInterval(() => {
-      // small random step so the count climbs gradually & irregularly
-      cur += Math.floor(Math.random() * 4) + 1;
-      setN(cur);
-    }, 90 + Math.floor(Math.random() * 80));
+      setN((prev) => {
+        const current = prev > target ? 0 : prev;
+        const remaining = target - current;
+        if (remaining <= 0) {
+          window.clearInterval(id);
+          return target;
+        }
+        const maxStep = Math.max(1, Math.ceil(remaining / 8));
+        return current + Math.min(remaining, Math.floor(Math.random() * maxStep) + 1);
+      });
+    }, 55 + Math.floor(Math.random() * 45));
+
     return () => window.clearInterval(id);
-  }, [priming]);
-  if (priming) return <>{n.toLocaleString("en-IN")}</>;
-  return <>{value}</>;
+  }, [priming, target, unavailable]);
+
+  if (unavailable) return <>—</>;
+  return <>{n.toLocaleString("en-IN")}</>;
 }
 
 const PRIMARY_TABS: TabDef[] = [
