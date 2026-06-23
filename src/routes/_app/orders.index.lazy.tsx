@@ -759,9 +759,10 @@ function OrdersPage() {
   const countsQuery = useQuery({
     queryKey: countsQueryKey,
     enabled: !!session && (!search.dup || dupePhonesReady) && !ordersQuery.isPending,
-    staleTime: 2 * 60_000,
-    gcTime: 10 * 60_000,
+    staleTime: ORDER_LIST_STALE_MS,
+    gcTime: ORDER_LIST_GC_MS,
     refetchOnWindowFocus: false,
+    refetchOnMount: false,
     placeholderData: keepPreviousData,
     retry: false,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
