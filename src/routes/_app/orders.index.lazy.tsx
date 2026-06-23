@@ -779,7 +779,7 @@ function OrdersPage() {
   const preorderDueCount = countsQuery.data?.preorderDueCount ?? 0;
 
   // Unified refetcher used by mutations + manual refresh buttons.
-  const refetchAll = async (showToast = false) => {
+  const refetchAll = useCallback(async (showToast = false) => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["orders", "list"] }),
       queryClient.invalidateQueries({ queryKey: ["orders", "counts"] }),
@@ -792,7 +792,7 @@ function OrdersPage() {
       window.dispatchEvent(new CustomEvent("orders:changed"));
     }
     if (showToast) toast.success("Orders refreshed");
-  };
+  }, [queryClient]);
 
   // Back-compat alias so existing call sites stay terse.
   const load = (showToast = false) => { void refetchAll(showToast); };
