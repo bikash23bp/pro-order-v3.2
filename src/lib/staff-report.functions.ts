@@ -236,6 +236,7 @@ export const getStaffDrilldown = createServerFn({ method: "POST" })
     const { supabase } = context;
     const isUnassigned = data.userId === "unassigned";
     const siteId = data.userId.startsWith("site:") ? data.userId.slice(5) : null;
+    const sourceOnly = data.userId.startsWith("source:") ? data.userId.slice(7) : null;
 
     let q = supabase.from("orders")
       .select("id, order_number, invoice_number, customer_name, customer_phone, phone_normalized, status, subtotal, discount_amount, delivery_charge, advance_amount, total_amount, source, created_at, created_by")
@@ -245,6 +246,7 @@ export const getStaffDrilldown = createServerFn({ method: "POST" })
       .limit(500);
 
     if (siteId) q = q.is("created_by", null).eq("source_site_id", siteId);
+    else if (sourceOnly) q = q.is("source_site_id", null).eq("source", sourceOnly);
     else if (isUnassigned) q = q.is("created_by", null).is("source_site_id", null);
     else q = q.eq("created_by", data.userId);
 
