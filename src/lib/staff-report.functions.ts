@@ -69,7 +69,7 @@ export const getStaffReport = createServerFn({ method: "POST" })
 
     const [ordersRes, profilesRes, sourcesRes, assignmentsRes, importedRes] = await Promise.all([
       supabase.from("orders")
-        .select("id, order_number, customer_name, customer_phone, phone_normalized, status, total_amount, source, order_source_id, created_by, created_at")
+        .select("id, order_number, customer_name, customer_phone, phone_normalized, status, total_amount, source, order_source_id, source_site_id, created_by, created_at")
         .gte("created_at", data.from)
         .lte("created_at", data.to),
       supabase.from("profiles").select("id, full_name, email"),
@@ -85,6 +85,19 @@ export const getStaffReport = createServerFn({ method: "POST" })
     const sources = sourcesRes.data ?? [];
     const assignments = assignmentsRes.data ?? [];
     const imported = importedRes.data ?? [];
+
+    const { data: integrations } = await supabase
+      .from("integrations")
+      .select("id, name, site_url");
+    const siteMap = new Map<string, string>(
+      (integrations ?? []).map((i: { id: string; name: string | null; site_url: string | null }) => {
+        let label = i.name?.trim() || "";
+        if (!label && i.site_url) {
+          try { label = new URL(i.site_url).hostname.replace(/^www\./, ""); } catch { label = i.site_url; }
+        }
+        return [i.id, label || "Website"];
+      }),
+    );
 
     const profileMap = new Map(profiles.map((p) => [p.id, p.full_name || p.email || "Unknown"]));
     const sourceMap = new Map(sources.map((s) => [s.id, s.name]));
@@ -123,7 +136,14 @@ export const getStaffReport = createServerFn({ method: "POST" })
     const bySourceAcc = new Map<string, Map<string, { count: number; amount: number; name: string }>>();
 
     for (const o of orders) {
-      const uid = o.created_by ?? "unassigned";
+      let uid: string;
+      if (o.created_by) {
+        uid = o.created_by;
+      } else if (o.source_site_id) {
+        uid = `site:${o.source_site_id}`;
+      } else {
+        uid = "unassigned";
+      }
       const row = ensure(uid);
       const amt = Number(o.total_amount || 0);
       const isRevenue = REVENUE_STATUSES.has(o.status);
@@ -161,7 +181,7 @@ export const getStaffReport = createServerFn({ method: "POST" })
     for (const [uid, m] of bySourceAcc.entries()) {
       const row = rowMap.get(uid);
       if (!row) continue;
-      row.by_source = Array.from(m.entries()).map(([sid, v]) => ({
+        row.by_source = Array.from(m.entries()).map(([sid, v]) => ({
         source_id: sid.startsWith("__src_") ? null : sid,
         source_name: v.name,
         count: v.count,
