@@ -211,7 +211,6 @@ const PRIMARY_TABS: TabDef[] = [
   { key: "preorder",    label: "Pre-Orders",     color: "violet" },
   { key: "hold",        label: "Hold",           color: "amber" },
   { key: "fraud",       label: "Fraud",          color: "red" },
-  { key: "sent_to_partner", label: "Sent to Partner", color: "teal" },
   { key: "all",         label: "All",            color: "slate" },
 ];
 
@@ -220,6 +219,7 @@ const PIPELINE_TABS: TabDef[] = [
   { key: "ready_order",   label: "Ready Order",    color: "amber" },  // পেন্ডিং-এর ঠিক পরেই এটি রাখলাম
   { key: "ready_to_ship", label: "Ready to Ship",  color: "cyan" },
   { key: "out_of_stock",  label: "Out of Stock",   color: "purple" },
+  { key: "sent_to_partner", label: "Sent to Partner", color: "teal" },
   { key: "shipped",       label: "Shipped",        color: "teal" },
   { key: "completed",     label: "Completed",      color: "green" },
   { key: "cancelled",     label: "Cancelled",      color: "zinc" },
