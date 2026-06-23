@@ -245,7 +245,7 @@ export const getStaffDrilldown = createServerFn({ method: "POST" })
       .order("created_at", { ascending: false })
       .limit(500);
 
-    if (siteId) q = q.is("created_by", null).eq("source_site_id", siteId);
+    if (siteId) q = q.eq("source_site_id", siteId);
     else if (sourceOnly) q = q.is("source_site_id", null).eq("source", sourceOnly);
     else if (isUnassigned) q = q.is("created_by", null).is("source_site_id", null);
     else q = q.eq("created_by", data.userId);
