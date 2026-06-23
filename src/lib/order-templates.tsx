@@ -30,6 +30,7 @@ export type OrderForTemplate = {
   subtotal: number;
   delivery_charge: number;
   created_at: string;
+  updated_at?: string | null;
   consignment_id: string | null;
   tracking_url: string | null;
   internal_note: string | null;
@@ -130,6 +131,23 @@ export function formatOrderDate(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+/** Inline "created · edited" stamp. Shows edit time only when it differs meaningfully (>30s). */
+export function OrderTimes({ order, separator = " · " }: { order: OrderForTemplate; separator?: string }) {
+  const created = formatOrderDate(order.created_at);
+  const updatedIso = order.updated_at;
+  const showUpdated = !!updatedIso
+    && updatedIso !== order.created_at
+    && Math.abs(new Date(updatedIso).getTime() - new Date(order.created_at).getTime()) > 30_000;
+  if (!showUpdated) return <>📅 {created}</>;
+  return (
+    <>
+      📅 {created}
+      <span className="opacity-70">{separator}</span>
+      ✎ {formatOrderDate(updatedIso!)}
+    </>
+  );
 }
 
 function StatusSelect({ order, actions, size = "default" }: {
