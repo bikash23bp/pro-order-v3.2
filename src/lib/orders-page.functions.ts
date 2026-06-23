@@ -22,10 +22,6 @@ const OrdersInput = z.object({
 type CountBucket = { count: number; amount: number };
 
 const ORDER_LIST_SELECT = "id, order_number, invoice_number, customer_name, customer_phone, customer_email, customer_address, status, total_amount, delivery_charge, discount_amount, advance_amount, advance_source_id, advance_txn_id, subtotal, created_at, consignment_id, tracking_url, invoice_note, internal_note, courier_id, order_source_id, source, preorder, preorder_date, customer_type, created_by, updated_by, oms_sender_name, oms_sender_order_no, source_site_id, is_paid_marketing, order_sources(name)";
-// Exact counts can full-scan large filtered order sets through RLS and time out.
-// Planned keeps pagination responsive; tab badges still use the aggregate RPC for exact-ish totals.
-const ORDER_LIST_COUNT_MODE = "planned" as const;
-
 const ACTIVE_ORDER_STATUSES = new Set([
   "pending_web",
   "pending",
@@ -101,18 +97,6 @@ function emptyTabCountsData() {
     partner: emptyBucket(),
     preorder: emptyBucket(),
   };
-}
-
-function isRangeNotSatisfiable(error: {
-  message?: string | null;
-  details?: string | null;
-  code?: string | null;
-  status?: number | null;
-} | null | undefined) {
-  if (!error) return false;
-  if (Number(error.status ?? 0) === 416) return true;
-  if (String(error.code ?? "").toUpperCase() === "PGRST103") return true;
-  return /range not satisfiable/i.test(`${error.message ?? ""} ${error.details ?? ""}`);
 }
 
 function isStatementTimeout(error: { message?: string | null; details?: string | null; code?: string | null } | null | undefined) {
@@ -351,64 +335,12 @@ export const listOrdersPage = createServerFn({ method: "POST" })
     if (data.status === "incomplete") {
       const buildQuery = (base: any) => applyOmsAccessFilter(applyCommonFilters(base.eq("status", "incomplete"), data), omsAllowed);
       // Filter by the dedicated `incomplete` status so the list always matches the tab count.
-      let qb: any = context.supabase.from("orders").select(ORDER_LIST_SELECT, { count: ORDER_LIST_COUNT_MODE });
-      qb = buildQuery(qb);
-      let { data: rows, error, count } = await qb
-        .order("created_at", { ascending: false })
-        .range(offset, offset + data.limit - 1);
-      if (isStatementTimeout(error)) return fetchOrdersPageWithoutCount(context, data, offset, buildQuery);
-      if (isRangeNotSatisfiable(error)) {
-        let fallbackQb: any = context.supabase.from("orders").select(ORDER_LIST_SELECT, { count: ORDER_LIST_COUNT_MODE });
-        fallbackQb = buildQuery(fallbackQb);
-        const { data: fallbackRows, error: fallbackError, count: fallbackCount } = await fallbackQb
-          .order("created_at", { ascending: false })
-          .range(0, data.limit - 1);
-        if (isStatementTimeout(fallbackError)) return fetchOrdersPageWithoutCount(context, { ...data, page: 1 }, 0, buildQuery);
-        if (fallbackError) throw new Error(fallbackError.message);
-        rows = fallbackRows ?? [];
-        count = fallbackCount ?? rows.length;
-        data.page = 1;
-        error = null as any;
-      }
-      if (error) throw new Error(error.message);
-      const orders = rows ?? [];
-
-
-
-      return {
-        rows: await enrichOrdersForList(context, orders),
-        totalCount: count ?? 0,
-        currentPage: Math.min(data.page, Math.max(1, Math.ceil((count ?? 0) / data.limit) || 1)),
-      };
+      // Keep the list path count-free; tab/count totals load separately in the background.
+      return fetchOrdersPageWithoutCount(context, data, offset, buildQuery);
     }
 
     const buildQuery = (base: any) => applyOmsAccessFilter(applyFilters(base, data), omsAllowed);
-    let qb: any = context.supabase.from("orders").select(ORDER_LIST_SELECT, { count: ORDER_LIST_COUNT_MODE });
-    qb = buildQuery(qb);
-    let { data: rows, error, count } = await qb.order("created_at", { ascending: false }).range(offset, offset + data.limit - 1);
-    if (isStatementTimeout(error)) return fetchOrdersPageWithoutCount(context, data, offset, buildQuery);
-    if (isRangeNotSatisfiable(error)) {
-      let fallbackQb: any = context.supabase.from("orders").select(ORDER_LIST_SELECT, { count: ORDER_LIST_COUNT_MODE });
-      fallbackQb = buildQuery(fallbackQb);
-      const { data: fallbackRows, error: fallbackError, count: fallbackCount } = await fallbackQb
-        .order("created_at", { ascending: false })
-        .range(0, data.limit - 1);
-      if (isStatementTimeout(fallbackError)) return fetchOrdersPageWithoutCount(context, { ...data, page: 1 }, 0, buildQuery);
-      if (fallbackError) throw new Error(fallbackError.message);
-      rows = fallbackRows ?? [];
-      count = fallbackCount ?? rows.length;
-      data.page = 1;
-      error = null as any;
-    }
-    if (error) throw new Error(error.message);
-
-    const orders = rows ?? [];
-
-    return {
-      rows: await enrichOrdersForList(context, orders),
-      totalCount: count ?? 0,
-      currentPage: Math.min(data.page, Math.max(1, Math.ceil((count ?? 0) / data.limit) || 1)),
-    };
+    return fetchOrdersPageWithoutCount(context, data, offset, buildQuery);
   });
 
 export const getOrderCountsPage = createServerFn({ method: "POST" })
