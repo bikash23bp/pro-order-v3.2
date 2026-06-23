@@ -414,6 +414,7 @@ function OrdersPage() {
 
   useEffect(() => {
     if (!session) return;
+    let cancelled = false;
     // Defer tag map fetch: only load when a tag filter is actually selected.
     (async () => {
       if (!search.dup) {
@@ -424,32 +425,37 @@ function OrdersPage() {
       setDupePhonesReady(false);
       try {
         const r = await fetchDupes();
+        if (cancelled) return;
         // Use normalized full phones so the orders query can use the phone_normalized index.
         setDupePhones(new Set(r.phonesNormalized?.length ? r.phonesNormalized : r.phones));
       } catch {/* ignore */}
-      finally { setDupePhonesReady(true); }
+      finally { if (!cancelled) setDupePhonesReady(true); }
     })();
     (async () => {
       try {
         const data = await getFilterOptions();
+        if (cancelled) return;
         setSources(data.sources as { id: string; name: string }[]);
         setCouriers(data.couriers as { id: string; name: string }[]);
         setAssignableUsers(((data.assignableUsers ?? []) as { id: string; display_name: string }[]).map((u) => ({ id: u.id, display_name: u.display_name })));
         setPartners(((data as any).partners ?? []) as string[]);
       } catch (e) {
+        if (cancelled) return;
         toast.error(e instanceof Error ? e.message : "Failed to load order filters");
       }
     })();
     (async () => {
       try {
         const list = await fetchSites();
+        if (cancelled) return;
         setSites((list ?? []).map((s: any) => ({
           id: s.id as string,
           name: (s.name as string) || (s.site_url ? String(s.site_url).replace(/^https?:\/\//, "").replace(/\/+$/, "") : "Site"),
         })));
       } catch {/* ignore */}
     })();
-  }, [session, search.dup, fetchDupes]);
+    return () => { cancelled = true; };
+  }, [session, search.dup, fetchDupes, getFilterOptions, fetchSites]);
 
   // Debounce search input — avoid refetch on every keystroke.
   useEffect(() => {
