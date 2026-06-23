@@ -352,6 +352,7 @@ function OrdersPage() {
   const assignTelesales = useServerFn(importTelesalesCustomers);
   const listOrders = useServerFn(listOrdersPage);
   const getOrderCounts = useServerFn(getOrderCountsPage);
+  const fetchOrderFlags = useServerFn(getOrderListFlags);
   const getFilterOptions = useServerFn(getOrderFilterOptions);
   const fetchSites = useServerFn(listIntegrationLabels);
 
