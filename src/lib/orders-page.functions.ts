@@ -103,6 +103,9 @@ function isRangeNotSatisfiable(error: {
 }
 
 async function getAllowedOmsSenders(ctx: { supabase: any; userId: string }): Promise<string[] | null> {
+  const cached = OMS_ACCESS_CACHE.get(ctx.userId);
+  const now = Date.now();
+  if (cached && cached.expires > now) return cached.value;
   const [rolesRes, profileRes, accessRes] = await Promise.all([
     ctx.supabase
       .from("user_roles")
@@ -113,10 +116,16 @@ async function getAllowedOmsSenders(ctx: { supabase: any; userId: string }): Pro
     (ctx.supabase as any).from("user_oms_access").select("sender_name").eq("user_id", ctx.userId),
   ]);
   const roles = new Set(((rolesRes.data ?? []) as { role: string }[]).map((r) => r.role));
-  if (roles.has("admin") || roles.has("business_owner")) return null;
-  if ((profileRes.data?.permissions as any)?.can_view_all_orders) return null;
-  return ((accessRes.data ?? []) as { sender_name: string }[]).map((r) => r.sender_name);
+  let value: string[] | null;
+  if (roles.has("admin") || roles.has("business_owner")) value = null;
+  else if ((profileRes.data?.permissions as any)?.can_view_all_orders) value = null;
+  else value = ((accessRes.data ?? []) as { sender_name: string }[]).map((r) => r.sender_name);
+  OMS_ACCESS_CACHE.set(ctx.userId, { value, expires: now + OMS_ACCESS_TTL_MS });
+  return value;
 }
+
+const OMS_ACCESS_TTL_MS = 60_000;
+const OMS_ACCESS_CACHE = new Map<string, { value: string[] | null; expires: number }>();
 
 function applyOmsAccessFilter(qb: any, allowed: string[] | null) {
   if (allowed === null) return qb;

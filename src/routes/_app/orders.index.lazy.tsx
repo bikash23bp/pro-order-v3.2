@@ -560,6 +560,32 @@ function OrdersPage() {
     navigate({ to: "/orders", search: (prev: { status?: string; page?: number; limit?: number }) => ({ ...prev, status, page: 1 }) });
   };
 
+  // Warm the cache for a tab on hover/mousedown so click feels instant.
+  const prefetchOrderTab = (status: string) => {
+    if (!session) return;
+    const key = [
+      "orders", "list",
+      { status, page: 1, limit, source: sourceFilter, site: siteFilter, courier: courierFilter,
+        partner: partnerFilter, staff: staffFilter,
+        preset: datePreset, from: fromIso, to: toIso, q: debouncedQ, tagPhones: tagPhoneFilter,
+        advanceOnly },
+    ];
+    queryClient.prefetchQuery({
+      queryKey: key,
+      staleTime: ORDER_LIST_STALE_MS,
+      queryFn: async () => listOrders({ data: {
+        status, page: 1, limit,
+        source: sourceFilter, site: siteFilter, courier: courierFilter,
+        partner: partnerFilter, staff: staffFilter,
+        from: datePreset === "all" ? null : fromIso,
+        to: datePreset === "all" ? null : toIso,
+        q: debouncedQ,
+        tagPhones: tagPhoneFilter,
+        advanceOnly,
+      } }),
+    }).catch(() => {});
+  };
+
   const rows: Order[] = ordersQuery.data?.rows ?? [];
   const totalCount = ordersQuery.data?.totalCount ?? 0;
   const serverPage = ordersQuery.data?.currentPage ?? page;
@@ -620,7 +646,7 @@ function OrdersPage() {
   const countsQuery = useQuery({
     queryKey: countsQueryKey,
     enabled: !!session,
-    staleTime: 10_000,
+    staleTime: 30_000,
     gcTime: 5 * 60_000,
     refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
@@ -1379,6 +1405,8 @@ function OrdersPage() {
                     key={tab.key}
                     type="button"
                     onClick={() => selectOrderTab(tab.key)}
+                    onMouseEnter={() => prefetchOrderTab(tab.key)}
+                    onTouchStart={() => prefetchOrderTab(tab.key)}
                     className={cls}
                     data-tab-key={tab.key}
                     aria-pressed={active}
@@ -1415,6 +1443,8 @@ function OrdersPage() {
                     key={tab.key}
                     type="button"
                     onClick={() => selectOrderTab(tab.key)}
+                    onMouseEnter={() => prefetchOrderTab(tab.key)}
+                    onTouchStart={() => prefetchOrderTab(tab.key)}
                     className={`flex flex-col items-center justify-center rounded-md border-2 px-1.5 py-1 w-full min-w-0 shadow-sm transition-colors cursor-pointer select-none ${c.border} ${c.hover} ${active ? `${c.activeBg} ${c.activeText} shadow-md` : ""}`}
                     data-tab-key={tab.key}
                     aria-pressed={active}
