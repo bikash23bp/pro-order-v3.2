@@ -583,7 +583,6 @@ function OrdersPage() {
     gcTime: ORDER_LIST_GC_MS,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
-    placeholderData: keepPreviousData,
     retry: transientOrderLoadRetry,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
     queryFn: async () => {
