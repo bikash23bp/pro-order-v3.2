@@ -523,3 +523,55 @@ export const exportOrdersPage = createServerFn({ method: "POST" })
     }
     return { rows: out };
   });
+
+// Server-side verification: independently recounts orders with
+// forwarded_to_partner_at IS NOT NULL and compares against the bucket
+// returned by the same filter logic used by the Sent to Partner tab.
+export const verifySentToPartnerCount = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: {
+    source?: string; site?: string; courier?: string; partner?: string;
+    staff?: string; from?: string | null; to?: string | null; advanceOnly?: boolean;
+  }) => input ?? {})
+  .handler(async ({ data, context }) => {
+    const applyFilters = (qb: any) => {
+      if (data.source && data.source !== "all") qb = qb.eq("order_source_id", data.source);
+      if (data.site && data.site !== "all") qb = qb.eq("source_site_id", data.site);
+      if (data.courier && data.courier !== "all") qb = qb.eq("courier_id", data.courier);
+      if (data.partner && data.partner !== "all") qb = qb.eq("oms_sender_name", data.partner);
+      if (data.staff && data.staff !== "all") qb = qb.eq("created_by", data.staff);
+      if (data.from && data.to) qb = qb.gte("created_at", data.from).lte("created_at", data.to);
+      if (data.advanceOnly) qb = qb.gt("advance_amount", 0);
+      return qb;
+    };
+
+    // Tab bucket recompute (mirrors getOrdersPageMeta logic)
+    let bucket: any = context.supabase
+      .from("orders")
+      .select("total_amount", { count: "planned" })
+      .not("forwarded_to_partner_at", "is", null);
+    bucket = applyFilters(bucket);
+    const { data: bucketRows, count: bucketCount, error: bucketErr } = await bucket;
+    if (bucketErr) throw new Error(`bucket: ${bucketErr.message}`);
+    const bucketAmount = ((bucketRows ?? []) as Array<{ total_amount: number | string | null }>)
+      .reduce((a, r) => a + (Number(r.total_amount ?? 0) || 0), 0);
+
+    // Independent verification: exact head count over the same predicate
+    let verify: any = context.supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .not("forwarded_to_partner_at", "is", null);
+    verify = applyFilters(verify);
+    const { count: verifyCount, error: verifyErr } = await verify;
+    if (verifyErr) throw new Error(`verify: ${verifyErr.message}`);
+
+    const tabCount = bucketCount ?? (bucketRows?.length ?? 0);
+    const actualCount = verifyCount ?? 0;
+    return {
+      tabCount,
+      actualCount,
+      tabAmount: bucketAmount,
+      matches: tabCount === actualCount,
+      diff: tabCount - actualCount,
+    };
+  });
