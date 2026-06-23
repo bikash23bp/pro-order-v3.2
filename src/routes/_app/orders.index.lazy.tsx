@@ -361,8 +361,8 @@ function OrdersPage() {
   const [staffFilter, setStaffFilter] = useState<string>((search as any).staff ?? "all");
   const [tagFilter, setTagFilter] = useState<string>("all");
   const [tagsByPhone, setTagsByPhone] = useState<Record<string, CustomerTag[]>>({});
-  const [dateRange, setDateRange] = useState<DateRange>(() => presetRange("all"));
-  const [datePreset, setDatePreset] = useState<PresetKey>("all");
+  const [dateRange, setDateRange] = useState<DateRange>(() => presetRange("year"));
+  const [datePreset, setDatePreset] = useState<PresetKey>("year");
   const [advanceOnly, setAdvanceOnly] = useState(Boolean(search.advanceOnly));
   const [customOpen, setCustomOpen] = useState(false);
   const [tempFrom, setTempFrom] = useState<Date | undefined>(undefined);
