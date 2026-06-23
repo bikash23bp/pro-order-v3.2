@@ -24,7 +24,7 @@ type CountBucket = { count: number; amount: number };
 const ORDER_LIST_SELECT = "id, order_number, invoice_number, customer_name, customer_phone, customer_email, customer_address, status, total_amount, delivery_charge, discount_amount, advance_amount, advance_source_id, advance_txn_id, subtotal, created_at, consignment_id, tracking_url, invoice_note, internal_note, courier_id, order_source_id, source, preorder, preorder_date, customer_type, created_by, updated_by, oms_sender_name, oms_sender_order_no, source_site_id, is_paid_marketing, order_sources(name)";
 // Exact counts can full-scan large filtered order sets through RLS and time out.
 // Planned keeps pagination responsive; tab badges still use the aggregate RPC for exact-ish totals.
-const ORDER_LIST_COUNT_MODE: "planned" = "planned";
+const ORDER_LIST_COUNT_MODE = "planned" as const;
 
 const ACTIVE_ORDER_STATUSES = new Set([
   "pending_web",
@@ -359,7 +359,6 @@ export const listOrdersPage = createServerFn({ method: "POST" })
         data.page = 1;
         error = null as any;
       }
-      if (isStatementTimeout(error)) return { rows: [], totalCount: 0, currentPage: data.page, timedOut: true };
       if (error) throw new Error(error.message);
       const orders = rows ?? [];
 
@@ -390,7 +389,6 @@ export const listOrdersPage = createServerFn({ method: "POST" })
       data.page = 1;
       error = null as any;
     }
-    if (isStatementTimeout(error)) return { rows: [], totalCount: 0, currentPage: data.page, timedOut: true };
     if (error) throw new Error(error.message);
 
     const orders = rows ?? [];
