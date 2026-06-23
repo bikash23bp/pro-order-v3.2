@@ -69,7 +69,7 @@ export const Route = createFileRoute("/api/public/facebook-page-orders/webhook")
         const token = url.searchParams.get("hub.verify_token");
         const challenge = url.searchParams.get("hub.challenge");
 
-        const { data: settings } = await supabaseAdmin
+        const { data: settings } = await (await getAdmin())
           .from("facebook_settings")
           .select("verify_token")
           .eq("id", true)
@@ -84,7 +84,7 @@ export const Route = createFileRoute("/api/public/facebook-page-orders/webhook")
       POST: async ({ request }) => {
         const body = await request.text();
 
-        const { data: settings } = await supabaseAdmin
+        const { data: settings } = await (await getAdmin())
           .from("facebook_settings")
           .select("app_secret, enabled")
           .eq("id", true)
@@ -150,7 +150,7 @@ export const Route = createFileRoute("/api/public/facebook-page-orders/webhook")
         for (const entry of entries) {
           const pageId = entry.id ?? null;
           const { data: page } = pageId
-            ? await supabaseAdmin
+            ? await (await getAdmin())
                 .from("facebook_pages")
                 .select("page_name")
                 .eq("page_id", pageId)
@@ -190,7 +190,7 @@ export const Route = createFileRoute("/api/public/facebook-page-orders/webhook")
             const externalId = m.message?.mid ?? `${psid}-${m.timestamp ?? Date.now()}`;
 
             // Skip duplicates
-            const { data: existing } = await supabaseAdmin
+            const { data: existing } = await (await getAdmin())
               .from("orders")
               .select("id")
               .eq("source", "facebook")
@@ -209,7 +209,7 @@ export const Route = createFileRoute("/api/public/facebook-page-orders/webhook")
               continue;
             }
 
-            const { data: inserted, error: insErr } = await supabaseAdmin
+            const { data: inserted, error: insErr } = await (await getAdmin())
               .from("orders")
               .insert({
                 customer_name: customerName,
