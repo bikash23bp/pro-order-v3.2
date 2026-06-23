@@ -22,6 +22,7 @@ const OrdersInput = z.object({
 type CountBucket = { count: number; amount: number };
 
 const ORDER_LIST_SELECT = "id, order_number, invoice_number, customer_name, customer_phone, customer_email, customer_address, status, total_amount, delivery_charge, discount_amount, advance_amount, advance_source_id, advance_txn_id, subtotal, created_at, consignment_id, tracking_url, invoice_note, internal_note, courier_id, order_source_id, source, preorder, preorder_date, customer_type, created_by, updated_by, oms_sender_name, oms_sender_order_no, source_site_id, is_paid_marketing, forwarded_to_partner_at, order_sources(name)";
+const ORDER_LIST_SELECT_LEGACY = "id, order_number, invoice_number, customer_name, customer_phone, customer_email, customer_address, status, total_amount, delivery_charge, discount_amount, advance_amount, advance_source_id, advance_txn_id, subtotal, created_at, consignment_id, tracking_url, invoice_note, internal_note, courier_id, order_source_id, source, preorder, preorder_date, customer_type, created_by, updated_by, oms_sender_name, oms_sender_order_no, source_site_id, is_paid_marketing, order_sources(name)";
 const ACTIVE_ORDER_STATUSES = new Set([
   "pending_web",
   "pending",
@@ -103,6 +104,12 @@ function isStatementTimeout(error: { message?: string | null; details?: string |
   if (!error) return false;
   if (String(error.code ?? "").toUpperCase() === "57014") return true;
   return /statement timeout|canceling statement/i.test(`${error.message ?? ""} ${error.details ?? ""}`);
+}
+
+function isMissingForwardedColumn(error: { message?: string | null; details?: string | null; code?: string | null } | null | undefined) {
+  if (!error) return false;
+  const text = `${error.code ?? ""} ${error.message ?? ""} ${error.details ?? ""}`;
+  return /42703|PGRST204|forwarded_to_partner_at|schema cache/i.test(text);
 }
 
 async function getAllowedOmsSenders(ctx: { supabase: any; userId: string }): Promise<string[] | null> {
@@ -217,13 +224,31 @@ async function fetchOrdersPageWithoutCount(
   offset: number,
   buildQuery: (qb: any) => any,
 ) {
-  let qb: any = context.supabase.from("orders").select(ORDER_LIST_SELECT);
-  qb = buildQuery(qb);
-  const { data: fetchedRows, error } = await qb
-    .order("created_at", { ascending: false })
-    .range(offset, offset + data.limit);
+  const runQuery = async (selectCols: string) => {
+    let qb: any = context.supabase.from("orders").select(selectCols);
+    qb = buildQuery(qb);
+    return await qb
+      .order("created_at", { ascending: false })
+      .range(offset, offset + data.limit);
+  };
+
+  let { data: fetchedRows, error } = await runQuery(ORDER_LIST_SELECT);
   if (error) {
     if (isStatementTimeout(error)) return { rows: [], totalCount: 0, currentPage: data.page, timedOut: true };
+    if (isMissingForwardedColumn(error)) {
+      if (data.status === "sent_to_partner") {
+        return { rows: [], totalCount: 0, currentPage: 1, schemaMissingForwardedToPartnerAt: true };
+      }
+      const legacy = await runQuery(ORDER_LIST_SELECT_LEGACY);
+      if (legacy.error) {
+        if (isStatementTimeout(legacy.error)) return { rows: [], totalCount: 0, currentPage: data.page, timedOut: true };
+        throw new Error(legacy.error.message);
+      }
+      fetchedRows = (legacy.data ?? []).map((row: any) => ({ ...row, forwarded_to_partner_at: null }));
+      error = null;
+    }
+  }
+  if (error) {
     throw new Error(error.message);
   }
   const fetched = fetchedRows ?? [];
@@ -388,8 +413,13 @@ export const getOrderCountsPage = createServerFn({ method: "POST" })
         const amount = ((stpRows ?? []) as Array<{ total_amount: number | string | null }>)
           .reduce((a, r) => a + (Number(r.total_amount ?? 0) || 0), 0);
         sentToPartnerBucket = { count: stpCount ?? (stpRows?.length ?? 0), amount };
+      } else if (!isMissingForwardedColumn(stpErr)) {
+        throw stpErr;
       }
-    } catch { /* keep zero bucket */ }
+    } catch (err) {
+      if (!isMissingForwardedColumn(err as { message?: string | null; details?: string | null; code?: string | null })) throw err;
+      /* keep zero bucket for older schemas/caches */
+    }
     const normalized = tabCountsData && typeof tabCountsData === "object"
       ? {
           ...(tabCountsData as Record<string, unknown>),
@@ -552,7 +582,12 @@ export const verifySentToPartnerCount = createServerFn({ method: "GET" })
       .not("forwarded_to_partner_at", "is", null);
     bucket = applyFilters(bucket);
     const { data: bucketRows, count: bucketCount, error: bucketErr } = await bucket;
-    if (bucketErr) throw new Error(`bucket: ${bucketErr.message}`);
+    if (bucketErr) {
+      if (isMissingForwardedColumn(bucketErr)) {
+        return { tabCount: 0, actualCount: 0, tabAmount: 0, matches: true, diff: 0, schemaMissingForwardedToPartnerAt: true };
+      }
+      throw new Error(`bucket: ${bucketErr.message}`);
+    }
     const bucketAmount = ((bucketRows ?? []) as Array<{ total_amount: number | string | null }>)
       .reduce((a, r) => a + (Number(r.total_amount ?? 0) || 0), 0);
 
@@ -563,7 +598,12 @@ export const verifySentToPartnerCount = createServerFn({ method: "GET" })
       .not("forwarded_to_partner_at", "is", null);
     verify = applyFilters(verify);
     const { count: verifyCount, error: verifyErr } = await verify;
-    if (verifyErr) throw new Error(`verify: ${verifyErr.message}`);
+    if (verifyErr) {
+      if (isMissingForwardedColumn(verifyErr)) {
+        return { tabCount: 0, actualCount: 0, tabAmount: 0, matches: true, diff: 0, schemaMissingForwardedToPartnerAt: true };
+      }
+      throw new Error(`verify: ${verifyErr.message}`);
+    }
 
     const tabCount = bucketCount ?? (bucketRows?.length ?? 0);
     const actualCount = verifyCount ?? 0;
