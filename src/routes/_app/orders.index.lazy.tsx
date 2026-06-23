@@ -659,6 +659,43 @@ function OrdersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visiblePhonesKey]);
 
+  // Fetch customer flags (VIP/repeat/duplicate/returned) for the visible page in
+  // a separate request so the main orders list renders instantly. Once flags
+  // arrive, merge them into the cached rows so badges appear without a refetch.
+  const visibleFlagKey = useMemo(() => {
+    if (!rows.length) return "";
+    return rows.map((r) => `${r.id}:${r.customer_phone ?? ""}:${r.customer_email ?? ""}:${r.status ?? ""}`).join("|");
+  }, [rows]);
+  useEffect(() => {
+    if (!visibleFlagKey || !session) return;
+    if (rows.every((r) => r.customer_flags)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const payload = rows.map((r) => ({
+          id: r.id,
+          phone: r.customer_phone ?? null,
+          email: r.customer_email ?? null,
+          status: r.status ?? null,
+        }));
+        const flagMap = await fetchOrderFlags({ data: { orders: payload } }) as Record<string, NonNullable<Order["customer_flags"]>>;
+        if (cancelled) return;
+        queryClient.setQueryData(ordersQueryKey, (prev: any) => {
+          if (!prev || !Array.isArray(prev.rows)) return prev;
+          return {
+            ...prev,
+            rows: prev.rows.map((r: Order) => ({
+              ...r,
+              customer_flags: flagMap[r.id] ?? r.customer_flags ?? { is_vip: false, is_repeat: false, is_duplicate: false, returned_count: 0 },
+            })),
+          };
+        });
+      } catch { /* non-fatal */ }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleFlagKey]);
+
 
   // ============ Tab counts query ============
   const countsQueryKey = useMemo(
