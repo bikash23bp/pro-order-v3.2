@@ -13,7 +13,18 @@ type StepResult = {
   ms: number;
 };
 
-async function assertCanManageDbSetup(supabase: any, userId: string) {
+const MAIN_ADMIN_EMAIL = "bikash23bp@gmail.com";
+
+function isMainAdminClaims(claims: unknown): boolean {
+  const email = typeof claims === "object" && claims && "email" in claims
+    ? String((claims as { email?: unknown }).email ?? "")
+    : "";
+  return email.toLowerCase() === MAIN_ADMIN_EMAIL;
+}
+
+async function assertCanManageDbSetup(supabase: any, userId: string, claims?: unknown) {
+  if (isMainAdminClaims(claims)) return;
+
   const { data, error } = await supabase
     .from("user_permissions")
     .select("can_manage_db_setup")
@@ -38,7 +49,7 @@ export const runDatabaseSetup = createServerFn({ method: "POST" })
     return input;
   })
   .handler(async ({ data, context }) => {
-    await assertCanManageDbSetup(context.supabase, context.userId);
+    await assertCanManageDbSetup(context.supabase, context.userId, context.claims);
 
     const { getAllMigrations } = await import("./db-setup.server");
     const { Client } = await import("pg");

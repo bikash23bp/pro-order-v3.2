@@ -190,7 +190,7 @@ export function useAuth() {
     setProfile(b.profile);
   }
 
-function hydrate(authUser: User) {
+  function hydrate(authUser: User) {
     const userId = authUser.id;
     // 1. instant: memory cache
     const mem = memCache.get(userId);
