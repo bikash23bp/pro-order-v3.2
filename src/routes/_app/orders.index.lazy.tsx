@@ -884,7 +884,6 @@ function OrdersPage() {
   };
   const countsPriming = !tabCountsData && !countsQuery.isError && (ordersQuery.isPending || countsQuery.isPending || countsQuery.isFetching || !countsQuery.data);
   const countsUnavailable = countsQuery.isError || (!countsPriming && !tabCountsData);
-  const fmtTabCount = (key: string) => countsUnavailable ? "—" : (tabCounts[key] ?? 0).toLocaleString("en-IN");
   const fmtTabAmount = (key: string) => countsUnavailable ? "৳ —" : `৳ ${fmtAmount(tabAmounts[key] ?? 0)}`;
 
   const todayISO = useMemo(() => {
@@ -1455,7 +1454,7 @@ function OrdersPage() {
                     <span className="text-[10px] font-medium truncate w-full text-center">{activeTab?.label ?? "Select"}</span>
                     {activeTab && (
                       <>
-                        <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} value={fmtTabCount(activeTab.key)} /></span>
+                        <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} target={tabCounts[activeTab.key] ?? 0} unavailable={countsUnavailable} /></span>
                         <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(activeTab.key)}</span>
                       </>
                     )}
@@ -1521,7 +1520,7 @@ function OrdersPage() {
                     aria-pressed={active}
                   >
                     <span className="text-[10px] font-medium truncate w-full text-center leading-tight">{tab.label}</span>
-                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} value={fmtTabCount(tab.key)} /></span>
+                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} target={tabCounts[tab.key] ?? 0} unavailable={countsUnavailable} /></span>
                     <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(tab.key)}</span>
                   </button>
                 );
@@ -1536,7 +1535,7 @@ function OrdersPage() {
                     aria-pressed={active}
                   >
                     <span className="text-[10px] font-medium truncate w-full text-center leading-tight">{tab.label}</span>
-                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} value={fmtTabCount(tab.key)} /></span>
+                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} target={tabCounts[tab.key] ?? 0} unavailable={countsUnavailable} /></span>
                     <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(tab.key)}</span>
                   </button>
                 );
@@ -1559,7 +1558,7 @@ function OrdersPage() {
                     aria-pressed={active}
                   >
                     <span className="text-[10px] font-semibold truncate w-full text-center leading-tight">{tab.label}</span>
-                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} value={fmtTabCount(tab.key)} /></span>
+                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} target={tabCounts[tab.key] ?? 0} unavailable={countsUnavailable} /></span>
                     <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(tab.key)}</span>
                   </button>
                 );
