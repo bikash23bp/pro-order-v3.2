@@ -168,7 +168,6 @@ type TabDef = {
 const PRIMARY_TABS: TabDef[] = [
   { key: "processing",  label: "Processing",     color: "blue" },
   { key: "pending_web", label: "Web (Pending)", color: "orange" }, 
-  { key: "web",         label: "Web (All)",     color: "sky" },
   { key: "facebook",    label: "Facebook",       color: "indigo" },
   { key: "partner",     label: "Partner Orders", color: "fuchsia" },
   { key: "incomplete",  label: "Incomplete Orders", color: "amber" },
