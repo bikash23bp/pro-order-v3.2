@@ -22,7 +22,9 @@ const OrdersInput = z.object({
 type CountBucket = { count: number; amount: number };
 
 const ORDER_LIST_SELECT = "id, order_number, invoice_number, customer_name, customer_phone, customer_email, customer_address, status, total_amount, delivery_charge, discount_amount, advance_amount, advance_source_id, advance_txn_id, subtotal, created_at, consignment_id, tracking_url, invoice_note, internal_note, courier_id, order_source_id, source, preorder, preorder_date, customer_type, created_by, updated_by, oms_sender_name, oms_sender_order_no, source_site_id, is_paid_marketing, order_sources(name)";
-const ORDER_LIST_COUNT_MODE: "exact" = "exact";
+// Exact counts can full-scan large filtered order sets through RLS and time out.
+// Planned keeps pagination responsive; tab badges still use the aggregate RPC for exact-ish totals.
+const ORDER_LIST_COUNT_MODE: "planned" = "planned";
 
 const ACTIVE_ORDER_STATUSES = new Set([
   "pending_web",
@@ -100,6 +102,12 @@ function isRangeNotSatisfiable(error: {
   if (Number(error.status ?? 0) === 416) return true;
   if (String(error.code ?? "").toUpperCase() === "PGRST103") return true;
   return /range not satisfiable/i.test(`${error.message ?? ""} ${error.details ?? ""}`);
+}
+
+function isStatementTimeout(error: { message?: string | null; details?: string | null; code?: string | null } | null | undefined) {
+  if (!error) return false;
+  if (String(error.code ?? "").toUpperCase() === "57014") return true;
+  return /statement timeout|canceling statement/i.test(`${error.message ?? ""} ${error.details ?? ""}`);
 }
 
 async function getAllowedOmsSenders(ctx: { supabase: any; userId: string }): Promise<string[] | null> {
