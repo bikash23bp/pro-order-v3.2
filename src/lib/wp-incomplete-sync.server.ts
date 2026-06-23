@@ -319,14 +319,10 @@ export async function importWpIncompleteRows(
     const shipping = Number(row.shipping ?? row.shipping_total ?? 0) || 0;
     const total = Number(row.total ?? (subtotal + shipping)) || (subtotal + shipping);
 
-    const meta: string[] = [];
-    if (row.session_id) meta.push(`Session: ${row.session_id}`);
-    if (row.event_id) meta.push(`Event: ${row.event_id}`);
-    const metaBlock = meta.length ? meta.join(" · ") : "";
-
+    // Keep internal note clean: do NOT include session_id / event_id tracking
+    // metadata. Only surface actionable info (missing phone, unmatched items).
     const noteParts = [
       phone ? "" : "Missing phone from WP incomplete order",
-      metaBlock,
       unmatchedBlock,
     ].filter(Boolean);
 
