@@ -714,7 +714,7 @@ function OrdersPage() {
     gcTime: 10 * 60_000,
     refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
-    retry: transientOrderLoadRetry,
+    retry: false,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
     queryFn: async () => {
       return await getOrderCounts({ data: {
@@ -725,7 +725,7 @@ function OrdersPage() {
         q: debouncedQ,
         tagPhones: tagPhoneFilter,
         advanceOnly,
-      } }) as { tabCountsData: TabCountsData | null; preorderDueCount: number };
+      } }) as { tabCountsData: TabCountsData | null; preorderDueCount: number; timedOut?: boolean; error?: string };
     },
   });
 
