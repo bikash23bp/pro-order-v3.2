@@ -104,6 +104,7 @@ function isRangeNotSatisfiable(error: {
 
 async function getAllowedOmsSenders(ctx: { supabase: any; userId: string }): Promise<string[] | null> {
   const cached = OMS_ACCESS_CACHE.get(ctx.userId);
+  const cached = OMS_ACCESS_CACHE.get(ctx.userId);
   const now = Date.now();
   if (cached && cached.expires > now) return cached.value;
   const [rolesRes, profileRes, accessRes] = await Promise.all([
