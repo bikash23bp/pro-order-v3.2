@@ -188,24 +188,36 @@ export const Route = createFileRoute("/api/public/webhooks/woocommerce")({
           return fail("Missing secret", 401);
         }
 
-        const { data: integration } = await supabaseAdmin
+        // Fetch all enabled WC integrations and compare in constant time.
+        // Avoids the timing oracle from an indexed equality lookup on webhook_secret.
+        type WcIntegration = {
+          id: string;
+          webhook_secret: string | null;
+          enabled: boolean;
+          site_url: string | null;
+          consumer_key: string | null;
+          consumer_secret: string | null;
+        };
+        const { data: integrations } = await supabaseAdmin
           .from("integrations")
           .select("id, webhook_secret, enabled, site_url, consumer_key, consumer_secret")
           .eq("provider", "woocommerce")
-          .eq("webhook_secret", secretParam)
-          .maybeSingle();
-
-        if (!integration || !integration.enabled) {
-          return fail("Integration not configured", 404);
+          .eq("enabled", true);
+        const presented = Buffer.from(secretParam);
+        let integration: WcIntegration | null = null;
+        for (const row of (integrations ?? []) as WcIntegration[]) {
+          if (!row?.webhook_secret) continue;
+          const expected = Buffer.from(row.webhook_secret);
+          if (expected.length === presented.length && timingSafeEqual(expected, presented)) {
+            integration = row;
+            // do not break — keep loop time constant w.r.t. secret position
+          }
         }
-
-        const sourceSiteId = integration.id;
-        const expectedSecret = integration.webhook_secret;
-        const a = Buffer.from(secretParam);
-        const b = Buffer.from(expectedSecret);
-        if (a.length !== b.length || !timingSafeEqual(a, b)) {
+        if (!integration) {
           return fail("Invalid secret", 401);
         }
+        const sourceSiteId = integration.id;
+        const expectedSecret = integration.webhook_secret!;
 
         // Optional WC HMAC signature check
         const sigHeader = request.headers.get("x-wc-webhook-signature");

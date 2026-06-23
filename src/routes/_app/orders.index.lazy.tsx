@@ -1,6 +1,6 @@
 import { createLazyFileRoute, Link, useSearch, useNavigate } from "@tanstack/react-router";
 import { MemberBadge } from "@/components/MemberBadge";
-import { useEffect, useMemo, useRef, useState, Fragment, lazy, Suspense } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, Fragment, lazy, Suspense } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Plus, Search, Eye, Trash2, FileText, RefreshCw, Pencil, Printer, Send, Crown, Loader2, Truck, Download, Phone, Upload, StickyNote, UserPlus, ChevronDown, ChevronUp } from "lucide-react";
@@ -362,8 +362,8 @@ function OrdersPage() {
   const [couriers, setCouriers] = useState<{ id: string; name: string }[]>([]);
   const [courierFilter, setCourierFilter] = useState<string>(search.courier ?? "all");
   const [partners, setPartners] = useState<string[]>([]);
-  const [partnerFilter, setPartnerFilter] = useState<string>((search as any).partner ?? "all");
-  const [staffFilter, setStaffFilter] = useState<string>((search as any).staff ?? "all");
+  const [partnerFilter, setPartnerFilter] = useState<string>(search.partner ?? "all");
+  const [staffFilter, setStaffFilter] = useState<string>(search.staff ?? "all");
   const [tagFilter, setTagFilter] = useState<string>("all");
   const [tagsByPhone, setTagsByPhone] = useState<Record<string, CustomerTag[]>>({});
   const [dateRange, setDateRange] = useState<DateRange>(() => presetRange("last365"));
@@ -414,6 +414,7 @@ function OrdersPage() {
 
   useEffect(() => {
     if (!session) return;
+    let cancelled = false;
     // Defer tag map fetch: only load when a tag filter is actually selected.
     (async () => {
       if (!search.dup) {
@@ -424,32 +425,37 @@ function OrdersPage() {
       setDupePhonesReady(false);
       try {
         const r = await fetchDupes();
+        if (cancelled) return;
         // Use normalized full phones so the orders query can use the phone_normalized index.
         setDupePhones(new Set(r.phonesNormalized?.length ? r.phonesNormalized : r.phones));
       } catch {/* ignore */}
-      finally { setDupePhonesReady(true); }
+      finally { if (!cancelled) setDupePhonesReady(true); }
     })();
     (async () => {
       try {
         const data = await getFilterOptions();
+        if (cancelled) return;
         setSources(data.sources as { id: string; name: string }[]);
         setCouriers(data.couriers as { id: string; name: string }[]);
         setAssignableUsers(((data.assignableUsers ?? []) as { id: string; display_name: string }[]).map((u) => ({ id: u.id, display_name: u.display_name })));
         setPartners(((data as any).partners ?? []) as string[]);
       } catch (e) {
+        if (cancelled) return;
         toast.error(e instanceof Error ? e.message : "Failed to load order filters");
       }
     })();
     (async () => {
       try {
         const list = await fetchSites();
+        if (cancelled) return;
         setSites((list ?? []).map((s: any) => ({
           id: s.id as string,
           name: (s.name as string) || (s.site_url ? String(s.site_url).replace(/^https?:\/\//, "").replace(/\/+$/, "") : "Site"),
         })));
       } catch {/* ignore */}
     })();
-  }, [session, search.dup, fetchDupes]);
+    return () => { cancelled = true; };
+  }, [session, search.dup, fetchDupes, getFilterOptions, fetchSites]);
 
   // Debounce search input — avoid refetch on every keystroke.
   useEffect(() => {
@@ -556,15 +562,6 @@ function OrdersPage() {
       }
     }
     return qb;
-  };
-
-  const applyStatusFilter = (qb: any) => {
-    if (effectiveStatusFilter === "web") return qb.eq("source", "woocommerce");
-    if (effectiveStatusFilter === "web_pending" || effectiveStatusFilter === "pending_web") return qb.eq("status", "pending_web");
-    if (effectiveStatusFilter === "facebook") return qb.eq("source", "facebook");
-    if (effectiveStatusFilter === "preorder") return qb.eq("preorder", true);
-    if (effectiveStatusFilter === "all") return qb;
-    return qb.eq("status", effectiveStatusFilter);
   };
 
   // ============ Orders list query — always fetch the selected tab ============
@@ -742,8 +739,7 @@ function OrdersPage() {
       } catch { /* non-fatal */ }
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleFlagKey]);
+  }, [visibleFlagKey, session, rows, fetchOrderFlags, queryClient, ordersQueryKey]);
 
 
   // ============ Tab counts query ============
@@ -783,17 +779,20 @@ function OrdersPage() {
   const preorderDueCount = countsQuery.data?.preorderDueCount ?? 0;
 
   // Unified refetcher used by mutations + manual refresh buttons.
-  const refetchAll = async (showToast = false) => {
+  const refetchAll = useCallback(async (showToast = false) => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["orders", "list"] }),
       queryClient.invalidateQueries({ queryKey: ["orders", "counts"] }),
     ]);
+    // Selection may reference rows that were deleted/edited by another user; clear it
+    // so subsequent bulk actions operate only on visible rows.
+    setSelected(new Set());
     // Notify topbar widgets (e.g. Duplicates badge) to refresh immediately.
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("orders:changed"));
     }
     if (showToast) toast.success("Orders refreshed");
-  };
+  }, [queryClient]);
 
   // Back-compat alias so existing call sites stay terse.
   const load = (showToast = false) => { void refetchAll(showToast); };
@@ -826,8 +825,7 @@ function OrdersPage() {
       if (timer) clearTimeout(timer);
       supabase.removeChannel(channel);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]);
+  }, [session, refetchAll]);
 
 
   const matchesTab = (r: Order, tab: string) => {
@@ -1523,20 +1521,6 @@ function OrdersPage() {
                     onClick={() => selectOrderTab(tab.key)}
                     onMouseEnter={() => prefetchOrderTab(tab.key)}
                     onTouchStart={() => prefetchOrderTab(tab.key)}
-                    className={cls}
-                    data-tab-key={tab.key}
-                    aria-pressed={active}
-                  >
-                    <span className="text-[10px] font-medium truncate w-full text-center leading-tight">{tab.label}</span>
-                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} target={tabCounts[tab.key] ?? 0} unavailable={countsUnavailable} /></span>
-                    <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(tab.key)}</span>
-                  </button>
-                );
-                return (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    onClick={() => selectOrderTab(tab.key)}
                     className={cls}
                     title={isPreorderAlert ? `${preorderDueCount} pre-order(s) due today or overdue` : undefined}
                     data-tab-key={tab.key}

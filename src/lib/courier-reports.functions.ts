@@ -1,9 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { resolveAdapter } from "./couriers/registry";
 import type { Credentials, Range } from "./couriers/types";
+// Lazy admin client — avoids top-level client.server import (keeps service-role key out of client bundle)
+const getAdmin = async () => (await import("@/integrations/supabase/client.server")).supabaseAdmin;
+
 
 const RangeInput = z.object({
   courierId: z.string().uuid(),
@@ -17,7 +19,7 @@ const TrackInput = z.object({
 });
 
 async function loadCourier(_supabase: any, id: string) {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await (await getAdmin())
     .from("couriers")
     .select("id, name, base_url, api_key, secret_key, status")
     .eq("id", id)
@@ -127,7 +129,7 @@ export const getCouriersSummary = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => SummaryInput.parse(i))
   .handler(async ({ data, context }) => {
-    const { data: list, error } = await supabaseAdmin
+    const { data: list, error } = await (await getAdmin())
       .from("couriers")
       .select("id, name, base_url, api_key, secret_key, status");
     if (error || !Array.isArray(list)) return { items: [] as any[] };

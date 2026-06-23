@@ -97,8 +97,10 @@ function Dashboard() {
   const byStatus = useMemo(() => {
     const out = Object.fromEntries(STATUS_KEYS.map((k) => [k, { ...EMPTY }])) as Record<StatusKey, MinBucket>;
     if (!data) return out;
+    // First copy every matching key from byStatus, then let top-level overrides win
+    // (defensive: works whether RPC puts "all"/"preorder" inside byStatus or at top level).
     for (const [k, v] of Object.entries(data.byStatus ?? {})) {
-      if (k in out && k !== "all" && k !== "preorder") out[k as StatusKey] = v as MinBucket;
+      if (k in out) out[k as StatusKey] = v as MinBucket;
     }
     if (data.all) out.all = data.all;
     if (data.preorder) out.preorder = data.preorder;
@@ -139,13 +141,14 @@ function Dashboard() {
       preset: "last365" as const, from: fromIso, to: toIso, q: "",
       tagPhones: null as string[] | null, advanceOnly: false,
     };
-    const listKey = ["orders", "list", { status: "pending", page: 1, limit: 10, ...baseFilters }];
+    // Must match the orders route's default search (status: "all" per ordersSearch Zod schema).
+    const listKey = ["orders", "list", { status: "all", page: 1, limit: 10, ...baseFilters }];
     const countsKey = ["orders", "counts", { ...baseFilters }];
     qc.prefetchQuery({
       queryKey: listKey,
       staleTime: 60_000,
       queryFn: () => prefetchOrdersList({ data: {
-        status: "pending", page: 1, limit: 10,
+        status: "all", page: 1, limit: 10,
         source: "all", site: "all", courier: "all", partner: "all", staff: "all",
         from: fromIso, to: toIso, q: "", tagPhones: null, advanceOnly: false,
       } }),

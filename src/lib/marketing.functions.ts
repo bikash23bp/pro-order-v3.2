@@ -1,7 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+// Lazy admin client — avoids top-level client.server import (keeps service-role key out of client bundle)
+const getAdmin = async () => (await import("@/integrations/supabase/client.server")).supabaseAdmin;
+
 
 const PhoneSchema = z.string().trim().min(3).max(32);
 const MessageSchema = z.string().trim().min(1).max(4000);
@@ -56,7 +58,7 @@ async function dispatchWhatsApp(s: WhatsAppSettings, phone: string, message: str
 export const getWhatsappSettings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await (await getAdmin())
       .from("whatsapp_settings")
       .select("enabled, api_url, api_token, phone_number_id, sender_name, updated_at")
       .eq("id", true)
@@ -312,7 +314,7 @@ export const getRecipientFacets = createServerFn({ method: "GET" })
 // ---------- Bulk send ----------
 
 async function loadWhatsappSettings(_supabase: any): Promise<WhatsAppSettings> {
-  const { data, error } = await supabaseAdmin.from("whatsapp_settings").select("*").eq("id", true).maybeSingle();
+  const { data, error } = await (await getAdmin()).from("whatsapp_settings").select("*").eq("id", true).maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error("WhatsApp settings not configured");
   return data as WhatsAppSettings;

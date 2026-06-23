@@ -1,7 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+// Lazy admin client — avoids top-level client.server import (keeps service-role key out of client bundle)
+const getAdmin = async () => (await import("@/integrations/supabase/client.server")).supabaseAdmin;
+
 
 export const COURIER_PROVIDERS = ["steadfast", "pathao", "redx"] as const;
 export type CourierProvider = (typeof COURIER_PROVIDERS)[number];
@@ -120,7 +122,7 @@ export const bulkSendToCourier = createServerFn({ method: "POST" })
     // Load candidate couriers
     let courierRows: CourierRow[] = [];
     if (data.courier_id) {
-      const { data: row, error } = await (supabaseAdmin as any)
+      const { data: row, error } = await ((await getAdmin()) as any)
         .from("couriers")
         .select("id, name, provider, api_key, secret_key, base_url, status, is_default")
         .eq("id", data.courier_id)
@@ -128,7 +130,7 @@ export const bulkSendToCourier = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
       if (row) courierRows = [row as CourierRow];
     } else if (data.provider) {
-      const { data: rows, error } = await (supabaseAdmin as any)
+      const { data: rows, error } = await ((await getAdmin()) as any)
         .from("couriers")
         .select("id, name, provider, api_key, secret_key, base_url, status, is_default")
         .eq("status", "active")

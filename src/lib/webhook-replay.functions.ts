@@ -1,7 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+// Lazy admin client — avoids top-level client.server import (keeps service-role key out of client bundle)
+const getAdmin = async () => (await import("@/integrations/supabase/client.server")).supabaseAdmin;
+
 
 const ReplayInput = z.object({
   log_id: z.string().uuid(),
@@ -18,7 +20,7 @@ export const replayWebhookFromLog = createServerFn({ method: "POST" })
     const { userId } = context;
 
     // Verify admin role
-    const { data: roleRow } = await supabaseAdmin
+    const { data: roleRow } = await (await getAdmin())
       .from("user_roles")
       .select("role")
       .eq("user_id", userId)
@@ -28,7 +30,7 @@ export const replayWebhookFromLog = createServerFn({ method: "POST" })
       throw new Error("Forbidden: admin only");
     }
 
-    const { data: log, error } = await supabaseAdmin
+    const { data: log, error } = await (await getAdmin())
       .from("webhook_logs")
       .select("id, provider, payload, status")
       .eq("id", data.log_id)
@@ -40,7 +42,7 @@ export const replayWebhookFromLog = createServerFn({ method: "POST" })
     if (!log.payload) throw new Error("No payload stored for this log");
 
     // Look up the integration secret to construct the URL
-    const { data: integration } = await supabaseAdmin
+    const { data: integration } = await (await getAdmin())
       .from("integrations")
       .select("webhook_secret, enabled")
       .eq("provider", "woocommerce")

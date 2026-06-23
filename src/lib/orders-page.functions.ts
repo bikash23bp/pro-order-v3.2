@@ -113,9 +113,6 @@ function isMissingForwardedColumn(error: { message?: string | null; details?: st
 }
 
 async function getAllowedOmsSenders(ctx: { supabase: any; userId: string }): Promise<string[] | null> {
-  const cached = OMS_ACCESS_CACHE.get(ctx.userId);
-  const now = Date.now();
-  if (cached && cached.expires > now) return cached.value;
   const [rolesRes, profileRes, accessRes] = await Promise.all([
     ctx.supabase
       .from("user_roles")
@@ -130,17 +127,18 @@ async function getAllowedOmsSenders(ctx: { supabase: any; userId: string }): Pro
   if (roles.has("admin") || roles.has("business_owner")) value = null;
   else if ((profileRes.data?.permissions as any)?.can_view_all_orders) value = null;
   else value = ((accessRes.data ?? []) as { sender_name: string }[]).map((r) => r.sender_name);
-  OMS_ACCESS_CACHE.set(ctx.userId, { value, expires: now + OMS_ACCESS_TTL_MS });
   return value;
 }
-
-const OMS_ACCESS_TTL_MS = 60_000;
-const OMS_ACCESS_CACHE = new Map<string, { value: string[] | null; expires: number }>();
 
 function applyOmsAccessFilter(qb: any, allowed: string[] | null) {
   if (allowed === null) return qb;
   if (allowed.length === 0) return qb.neq("source", "oms");
-  const list = allowed.map((s) => `"${String(s).replace(/"/g, '\\"')}"`).join(",");
+  // Sender names can contain commas/parentheses which break PostgREST's .or() syntax.
+  // Use a positive OR with native .in() filter chained via `or` raw is unsafe → split into two queries.
+  // Safe encoding: percent-encode every reserved PostgREST char then wrap in double quotes.
+  const encode = (s: string) =>
+    `"${String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/,/g, "\\,").replace(/[()]/g, (c) => `\\${c}`)}"`;
+  const list = allowed.map(encode).join(",");
   return qb.or(`source.neq.oms,oms_sender_name.in.(${list})`);
 }
 
@@ -392,14 +390,14 @@ export const getOrderCountsPage = createServerFn({ method: "POST" })
     if (isStatementTimeout(error)) return { tabCountsData: emptyTabCountsData(), preorderDueCount: 0, timedOut: true };
     if (error) return { tabCountsData: emptyTabCountsData(), preorderDueCount: 0, error: error.message };
     const today = new Date().toISOString().slice(0, 10);
-    const { count, error: dueError } = await context.supabase.from("orders").select("id", { count: "planned", head: true }).eq("preorder", true).not("preorder_date", "is", null).lte("preorder_date", today);
+    const { count, error: dueError } = await context.supabase.from("orders").select("id", { count: "exact", head: true }).eq("preorder", true).not("preorder_date", "is", null).lte("preorder_date", today);
     const preorderDueCount = dueError && isStatementTimeout(dueError) ? 0 : (count ?? 0);
     // Sent-to-Partner tab: simple count + amount sum, respects the same common filters as the RPC inputs.
     let sentToPartnerBucket: { count: number; amount: number } = { count: 0, amount: 0 };
     try {
       let stp: any = context.supabase
         .from("orders")
-        .select("total_amount", { count: "planned" })
+        .select("total_amount", { count: "exact" })
         .not("forwarded_to_partner_at", "is", null);
       if (data.source && data.source !== "all") stp = stp.eq("order_source_id", data.source);
       if (data.site && data.site !== "all") stp = stp.eq("source_site_id", data.site);

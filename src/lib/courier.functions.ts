@@ -1,7 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+// Lazy admin client — avoids top-level client.server import (keeps service-role key out of client bundle)
+const getAdmin = async () => (await import("@/integrations/supabase/client.server")).supabaseAdmin;
+
 
 const Input = z.object({ orderId: z.string().uuid() });
 
@@ -38,12 +40,12 @@ export const pushToSteadfast = createServerFn({ method: "POST" })
     let courier: CourierRow | null = null;
 
     if (courierId) {
-      const { data: c } = await supabaseAdmin.from("couriers").select("id, name, base_url, api_key, secret_key").eq("id", courierId).maybeSingle();
+      const { data: c } = await (await getAdmin()).from("couriers").select("id, name, base_url, api_key, secret_key").eq("id", courierId).maybeSingle();
       courier = (c as CourierRow | null) ?? null;
     }
     if (!courier) {
       // Prefer is_default Steadfast/Packzy, then fall back to any active one.
-      const { data: rows } = await supabaseAdmin
+      const { data: rows } = await (await getAdmin())
         .from("couriers")
         .select("id, name, base_url, api_key, secret_key, is_default")
         .eq("status", "active")
