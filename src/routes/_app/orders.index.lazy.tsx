@@ -211,6 +211,7 @@ const PRIMARY_TABS: TabDef[] = [
   { key: "preorder",    label: "Pre-Orders",     color: "violet" },
   { key: "hold",        label: "Hold",           color: "amber" },
   { key: "fraud",       label: "Fraud",          color: "red" },
+  { key: "sent_to_partner", label: "Sent to Partner", color: "teal" },
   { key: "all",         label: "All",            color: "slate" },
 ];
 
