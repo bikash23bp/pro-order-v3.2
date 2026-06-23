@@ -362,8 +362,8 @@ function OrdersPage() {
   const [couriers, setCouriers] = useState<{ id: string; name: string }[]>([]);
   const [courierFilter, setCourierFilter] = useState<string>(search.courier ?? "all");
   const [partners, setPartners] = useState<string[]>([]);
-  const [partnerFilter, setPartnerFilter] = useState<string>((search as any).partner ?? "all");
-  const [staffFilter, setStaffFilter] = useState<string>((search as any).staff ?? "all");
+  const [partnerFilter, setPartnerFilter] = useState<string>(search.partner ?? "all");
+  const [staffFilter, setStaffFilter] = useState<string>(search.staff ?? "all");
   const [tagFilter, setTagFilter] = useState<string>("all");
   const [tagsByPhone, setTagsByPhone] = useState<Record<string, CustomerTag[]>>({});
   const [dateRange, setDateRange] = useState<DateRange>(() => presetRange("last365"));
