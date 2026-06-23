@@ -12,11 +12,14 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 
 import appCss from "../styles.css?url";
 
+const PERSONAL_BACKEND_URL = "https://cmqqxjfadpfbtvlykcgz.supabase.co";
+const PERSONAL_BACKEND_PUBLISHABLE_KEY = "sb_publishable_UD-P5lLzKAcjeS4PO2UDmQ_wLhlpuqO";
+
 function getPublicRuntimeEnvScript() {
   const env = typeof process !== "undefined" ? process.env : {};
   const viteEnv = import.meta.env;
-  const supabaseUrl = env.SUPABASE_URL || env.VITE_SUPABASE_URL || viteEnv.VITE_SUPABASE_URL || "";
-  const supabaseKey = env.SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_ANON_KEY || viteEnv.VITE_SUPABASE_PUBLISHABLE_KEY || viteEnv.VITE_SUPABASE_ANON_KEY || "";
+  const supabaseUrl = env.SUPABASE_URL || env.VITE_SUPABASE_URL || viteEnv.VITE_SUPABASE_URL || PERSONAL_BACKEND_URL;
+  const supabaseKey = env.SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_ANON_KEY || viteEnv.VITE_SUPABASE_PUBLISHABLE_KEY || viteEnv.VITE_SUPABASE_ANON_KEY || PERSONAL_BACKEND_PUBLISHABLE_KEY;
 
   if (!supabaseUrl || !supabaseKey) return "";
 
