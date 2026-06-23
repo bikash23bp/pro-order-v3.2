@@ -825,8 +825,7 @@ function OrdersPage() {
       if (timer) clearTimeout(timer);
       supabase.removeChannel(channel);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]);
+  }, [session, refetchAll]);
 
 
   const matchesTab = (r: Order, tab: string) => {
