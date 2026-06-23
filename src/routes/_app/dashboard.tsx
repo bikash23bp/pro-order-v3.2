@@ -18,6 +18,7 @@ import { format } from "date-fns";
 
 import { getDashboardMinimal, type MinBucket } from "@/lib/dashboard-minimal.functions";
 import { type StatusKey } from "@/lib/dashboard.functions";
+import { listOrdersPage, getOrderCountsPage } from "@/lib/orders-page.functions";
 import { presetRange, startOfDay, endOfDay, type DateRange, type PresetKey } from "@/components/dashboard/DateRangeFilter";
 import { BusinessHeader } from "@/components/dashboard/BusinessHeader";
 import { useAuth } from "@/hooks/use-auth";
@@ -54,6 +55,8 @@ const STATUS_CARDS: { key: StatusKey; label: string; icon: typeof Package; color
 function Dashboard() {
   const qc = useQueryClient();
   const fetchMinimal = useServerFn(getDashboardMinimal);
+  const prefetchOrdersList = useServerFn(listOrdersPage);
+  const prefetchOrderCounts = useServerFn(getOrderCountsPage);
   const { permissions, role } = useAuth();
   const isAdmin = role === "admin" || role === "business_owner";
   const canViewAmounts = isAdmin || !!permissions?.can_view_profit;
@@ -123,6 +126,40 @@ function Dashboard() {
       supabase.removeChannel(ch);
     };
   }, [qc]);
+
+  // Warm the Orders page cache once after login so /orders feels instant.
+  // Matches the default query keys used by orders.index.lazy.tsx (status=pending,
+  // page=1, limit=10, all filters "all", date preset last365).
+  useEffect(() => {
+    const r = presetRange("last365");
+    const fromIso = r.from.toISOString();
+    const toIso = r.to.toISOString();
+    const baseFilters = {
+      source: "all", site: "all", courier: "all", partner: "all", staff: "all",
+      preset: "last365" as const, from: fromIso, to: toIso, q: "",
+      tagPhones: null as string[] | null, advanceOnly: false,
+    };
+    const listKey = ["orders", "list", { status: "pending", page: 1, limit: 10, ...baseFilters }];
+    const countsKey = ["orders", "counts", { ...baseFilters }];
+    qc.prefetchQuery({
+      queryKey: listKey,
+      staleTime: 60_000,
+      queryFn: () => prefetchOrdersList({ data: {
+        status: "pending", page: 1, limit: 10,
+        source: "all", site: "all", courier: "all", partner: "all", staff: "all",
+        from: fromIso, to: toIso, q: "", tagPhones: null, advanceOnly: false,
+      } }),
+    }).catch(() => {});
+    qc.prefetchQuery({
+      queryKey: countsKey,
+      staleTime: 2 * 60_000,
+      queryFn: () => prefetchOrderCounts({ data: {
+        source: "all", site: "all", courier: "all", partner: "all", staff: "all",
+        from: fromIso, to: toIso, q: "", tagPhones: null, advanceOnly: false,
+      } }),
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const fmt = (n: number) => `৳ ${Math.round(n).toLocaleString()}`;
 
