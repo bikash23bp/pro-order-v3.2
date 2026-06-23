@@ -849,8 +849,22 @@ function OrdersPage() {
   };
   const countsPriming = countsQuery.isPending && !countsQuery.data;
   const countsUnavailable = countsQuery.isError && !countsQuery.data;
-  const fmtTabCount = (key: string) => countsPriming ? "…" : countsUnavailable ? "—" : (tabCounts[key] ?? 0).toLocaleString("en-IN");
-  const fmtTabAmount = (key: string) => countsPriming ? "৳ …" : countsUnavailable ? "৳ —" : `৳ ${fmtAmount(tabAmounts[key] ?? 0)}`;
+  // Slot-machine style ticker while counts are loading: shows random numbers
+  // (1, 20, 50, 10…) cycling every ~120ms until the real counts arrive.
+  const [tickSeed, setTickSeed] = useState(0);
+  useEffect(() => {
+    if (!countsPriming) return;
+    const id = window.setInterval(() => setTickSeed((s) => s + 1), 120);
+    return () => window.clearInterval(id);
+  }, [countsPriming]);
+  const randomTick = (key: string) => {
+    // Deterministic per-key + seed so each tab ticks independently.
+    const pool = [1, 3, 7, 12, 20, 34, 50, 75, 99, 120, 180, 250];
+    const h = (key.charCodeAt(0) || 0) + tickSeed * 7;
+    return pool[h % pool.length];
+  };
+  const fmtTabCount = (key: string) => countsPriming ? randomTick(key).toLocaleString("en-IN") : countsUnavailable ? "—" : (tabCounts[key] ?? 0).toLocaleString("en-IN");
+  const fmtTabAmount = (key: string) => countsPriming ? `৳ ${fmtAmount(randomTick(key) * 100)}` : countsUnavailable ? "৳ —" : `৳ ${fmtAmount(tabAmounts[key] ?? 0)}`;
 
   const todayISO = useMemo(() => {
     const d = new Date();
