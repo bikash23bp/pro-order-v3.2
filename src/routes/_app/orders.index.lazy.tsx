@@ -165,6 +165,23 @@ type TabDef = {
   color: string;
 };
 
+function TickingNumber({ priming, value }: { priming: boolean; value: string }) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (!priming) return;
+    setN(0);
+    let cur = 0;
+    const id = window.setInterval(() => {
+      // small random step so the count climbs gradually & irregularly
+      cur += Math.floor(Math.random() * 4) + 1;
+      setN(cur);
+    }, 90 + Math.floor(Math.random() * 80));
+    return () => window.clearInterval(id);
+  }, [priming]);
+  if (priming) return <>{n.toLocaleString("en-IN")}</>;
+  return <>{value}</>;
+}
+
 const PRIMARY_TABS: TabDef[] = [
   { key: "processing",  label: "Processing",     color: "blue" },
   { key: "pending_web", label: "Web (Pending)", color: "orange" }, 
