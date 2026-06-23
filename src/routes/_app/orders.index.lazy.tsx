@@ -1436,7 +1436,7 @@ function OrdersPage() {
                     <span className="text-[10px] font-medium truncate w-full text-center">{activeTab?.label ?? "Select"}</span>
                     {activeTab && (
                       <>
-                        <span className="text-sm font-bold tabular-nums leading-tight">{fmtTabCount(activeTab.key)}</span>
+                        <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} value={fmtTabCount(activeTab.key)} /></span>
                         <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(activeTab.key)}</span>
                       </>
                     )}
@@ -1502,7 +1502,7 @@ function OrdersPage() {
                     aria-pressed={active}
                   >
                     <span className="text-[10px] font-medium truncate w-full text-center leading-tight">{tab.label}</span>
-                    <span className="text-sm font-bold tabular-nums leading-tight">{fmtTabCount(tab.key)}</span>
+                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} value={fmtTabCount(tab.key)} /></span>
                     <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(tab.key)}</span>
                   </button>
                 );
@@ -1517,7 +1517,7 @@ function OrdersPage() {
                     aria-pressed={active}
                   >
                     <span className="text-[10px] font-medium truncate w-full text-center leading-tight">{tab.label}</span>
-                    <span className="text-sm font-bold tabular-nums leading-tight">{fmtTabCount(tab.key)}</span>
+                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} value={fmtTabCount(tab.key)} /></span>
                     <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(tab.key)}</span>
                   </button>
                 );
@@ -1540,7 +1540,7 @@ function OrdersPage() {
                     aria-pressed={active}
                   >
                     <span className="text-[10px] font-semibold truncate w-full text-center leading-tight">{tab.label}</span>
-                    <span className="text-sm font-bold tabular-nums leading-tight">{fmtTabCount(tab.key)}</span>
+                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} value={fmtTabCount(tab.key)} /></span>
                     <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(tab.key)}</span>
                   </button>
                 );
