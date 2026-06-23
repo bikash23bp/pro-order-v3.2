@@ -94,7 +94,7 @@ function AuthPage() {
         <CardContent>
           {!forgotOpen ? (
             <>
-              <form onSubmit={handleSignIn} className="space-y-3" method="post" action="#">
+              <form onSubmit={handleSignIn} className="space-y-3">
                 <div>
                   <Label htmlFor="login-email">Email</Label>
                   <Input id="login-email" name="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
