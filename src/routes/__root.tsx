@@ -14,8 +14,9 @@ import appCss from "../styles.css?url";
 
 function getPublicRuntimeEnvScript() {
   const env = typeof process !== "undefined" ? process.env : {};
-  const supabaseUrl = env.SUPABASE_URL || env.VITE_SUPABASE_URL || "";
-  const supabaseKey = env.SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_ANON_KEY || "";
+  const viteEnv = import.meta.env;
+  const supabaseUrl = env.SUPABASE_URL || env.VITE_SUPABASE_URL || viteEnv.VITE_SUPABASE_URL || "";
+  const supabaseKey = env.SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_ANON_KEY || viteEnv.VITE_SUPABASE_PUBLISHABLE_KEY || viteEnv.VITE_SUPABASE_ANON_KEY || "";
 
   if (!supabaseUrl || !supabaseKey) return "";
 
