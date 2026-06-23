@@ -1,0 +1,2 @@
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS forwarded_to_partner_at timestamptz;
+CREATE INDEX IF NOT EXISTS idx_orders_forwarded_to_partner_at ON public.orders (forwarded_to_partner_at DESC) WHERE forwarded_to_partner_at IS NOT NULL;
