@@ -363,6 +363,7 @@ function OrdersPage() {
   const sendToCourier = useServerFn(bulkSendToCourier);
   const [courierBusy, setCourierBusy] = useState<CourierProvider | null>(null);
   const [dupePhones, setDupePhones] = useState<Set<string>>(new Set());
+  const [dupePhonesReady, setDupePhonesReady] = useState(!search.dup);
   const [blockedPhones, setBlockedPhones] = useState<Record<string, string>>({});
   const fetchBlockedPhones = useServerFn(checkBlockedPhones);
   const [blockingPhone, setBlockingPhone] = useState<string | null>(null);
@@ -375,11 +376,18 @@ function OrdersPage() {
     if (!session) return;
     // Defer tag map fetch: only load when a tag filter is actually selected.
     (async () => {
-      if (!search.dup) return;
+      if (!search.dup) {
+        setDupePhones(new Set());
+        setDupePhonesReady(true);
+        return;
+      }
+      setDupePhonesReady(false);
       try {
         const r = await fetchDupes();
-        setDupePhones(new Set(r.phones));
+        // Use normalized full phones so the orders query can use the phone_normalized index.
+        setDupePhones(new Set(r.phonesNormalized?.length ? r.phonesNormalized : r.phones));
       } catch {/* ignore */}
+      finally { setDupePhonesReady(true); }
     })();
     (async () => {
       try {
@@ -535,7 +543,7 @@ function OrdersPage() {
 
   const ordersQuery = useQuery({
     queryKey: ordersQueryKey,
-    enabled: !!session,
+    enabled: !!session && (!search.dup || dupePhonesReady),
     staleTime: ORDER_LIST_STALE_MS,
     gcTime: ORDER_LIST_GC_MS,
     refetchOnWindowFocus: false,
@@ -709,12 +717,12 @@ function OrdersPage() {
 
   const countsQuery = useQuery({
     queryKey: countsQueryKey,
-    enabled: !!session,
+    enabled: !!session && (!search.dup || dupePhonesReady),
     staleTime: 2 * 60_000,
     gcTime: 10 * 60_000,
     refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
-    retry: transientOrderLoadRetry,
+    retry: false,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
     queryFn: async () => {
       return await getOrderCounts({ data: {
@@ -725,7 +733,7 @@ function OrdersPage() {
         q: debouncedQ,
         tagPhones: tagPhoneFilter,
         advanceOnly,
-      } }) as { tabCountsData: TabCountsData | null; preorderDueCount: number };
+      } }) as { tabCountsData: TabCountsData | null; preorderDueCount: number; timedOut?: boolean; error?: string };
     },
   });
 

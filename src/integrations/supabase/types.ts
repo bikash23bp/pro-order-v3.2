@@ -1345,6 +1345,7 @@ export type Database = {
           oms_sender_order_no: string | null
           order_number: number
           order_source_id: string | null
+          phone_key8: string | null
           phone_normalized: string | null
           preorder: boolean
           preorder_date: string | null
@@ -1384,6 +1385,7 @@ export type Database = {
           oms_sender_order_no?: string | null
           order_number?: number
           order_source_id?: string | null
+          phone_key8?: string | null
           phone_normalized?: string | null
           preorder?: boolean
           preorder_date?: string | null
@@ -1423,6 +1425,7 @@ export type Database = {
           oms_sender_order_no?: string | null
           order_number?: number
           order_source_id?: string | null
+          phone_key8?: string | null
           phone_normalized?: string | null
           preorder?: boolean
           preorder_date?: string | null
@@ -3051,6 +3054,7 @@ export type Database = {
           oms_sender_order_no: string | null
           order_number: number
           order_source_id: string | null
+          phone_key8: string | null
           phone_normalized: string | null
           preorder: boolean
           preorder_date: string | null
@@ -3437,6 +3441,7 @@ export type Database = {
           oms_sender_order_no: string | null
           order_number: number
           order_source_id: string | null
+          phone_key8: string | null
           phone_normalized: string | null
           preorder: boolean
           preorder_date: string | null
