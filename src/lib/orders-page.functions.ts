@@ -369,9 +369,31 @@ export const getOrderCountsPage = createServerFn({ method: "POST" })
     const today = new Date().toISOString().slice(0, 10);
     const { count, error: dueError } = await context.supabase.from("orders").select("id", { count: "planned", head: true }).eq("preorder", true).not("preorder_date", "is", null).lte("preorder_date", today);
     const preorderDueCount = dueError && isStatementTimeout(dueError) ? 0 : (count ?? 0);
+    // Sent-to-Partner tab: simple count + amount sum, respects the same common filters as the RPC inputs.
+    let sentToPartnerBucket: { count: number; amount: number } = { count: 0, amount: 0 };
+    try {
+      let stp: any = context.supabase
+        .from("orders")
+        .select("total_amount", { count: "planned" })
+        .not("forwarded_to_partner_at", "is", null);
+      if (data.source && data.source !== "all") stp = stp.eq("order_source_id", data.source);
+      if (data.site && data.site !== "all") stp = stp.eq("source_site_id", data.site);
+      if (data.courier && data.courier !== "all") stp = stp.eq("courier_id", data.courier);
+      if (data.partner && data.partner !== "all") stp = stp.eq("oms_sender_name", data.partner);
+      if (data.staff && data.staff !== "all") stp = stp.eq("created_by", data.staff);
+      if (data.from && data.to) stp = stp.gte("created_at", data.from).lte("created_at", data.to);
+      if (data.advanceOnly) stp = stp.gt("advance_amount", 0);
+      const { data: stpRows, count: stpCount, error: stpErr } = await stp;
+      if (!stpErr) {
+        const amount = ((stpRows ?? []) as Array<{ total_amount: number | string | null }>)
+          .reduce((a, r) => a + (Number(r.total_amount ?? 0) || 0), 0);
+        sentToPartnerBucket = { count: stpCount ?? (stpRows?.length ?? 0), amount };
+      }
+    } catch { /* keep zero bucket */ }
     const normalized = tabCountsData && typeof tabCountsData === "object"
       ? {
           ...(tabCountsData as Record<string, unknown>),
+          sent_to_partner: sentToPartnerBucket,
           byStatus: {
             ...(((tabCountsData as { byStatus?: Record<string, unknown> }).byStatus) ?? {}),
             incomplete: ((tabCountsData as { byStatus?: Record<string, unknown> }).byStatus?.incomplete)
@@ -385,6 +407,7 @@ export const getOrderCountsPage = createServerFn({ method: "POST" })
           facebook: { count: 0, amount: 0 },
           partner: { count: 0, amount: 0 },
           preorder: { count: 0, amount: 0 },
+          sent_to_partner: sentToPartnerBucket,
         };
     return { tabCountsData: normalized, preorderDueCount };
   });
