@@ -24,6 +24,7 @@ type ProfileBundle = {
 };
 
 const CACHE_KEY = (uid: string) => `auth:profile:${uid}`;
+const CURRENT_BACKEND_HOST = "cmqqxjfadpfbtvlykcgz.supabase.co";
 
 // Module-level caches dedupe across hook instances
 const memCache = new Map<string, ProfileBundle>();
@@ -216,37 +217,59 @@ export function useAuth() {
   }
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
-      setSession(sess);
-      setUser(sess?.user ?? null);
-      setLoading(false);
-      if (sess?.user) {
-        // Only re-hydrate when the user actually changes — avoids extra
-        // profile fetches on TOKEN_REFRESHED / INITIAL_SESSION which cause
-        // loading flashes during login.
-        if (lastUidRef.current !== sess.user.id) {
-          lastUidRef.current = sess.user.id;
-          setProfileLoading(true); // set synchronously to avoid race with route guards
-          setTimeout(() => hydrate(sess.user), 0);
-        }
-      } else {
-        lastUidRef.current = null;
-        setRole(null);
-        setPermissions(null);
-        setProfile(null);
-        setProfileLoading(false);
-        clearLocal();
+    async function clearForeignBackendSession(sess: Session | null): Promise<boolean> {
+      const issuer = sess?.user?.aud ? sess.access_token.split(".")[1] : null;
+      if (!issuer || typeof window === "undefined") return false;
+      try {
+        const payload = JSON.parse(window.atob(issuer.replace(/-/g, "+").replace(/_/g, "/"))) as { iss?: string };
+        if (!payload.iss || payload.iss.includes(CURRENT_BACKEND_HOST)) return false;
+        await supabase.auth.signOut();
+        setSession(null);
+        setUser(null);
+        setLoading(false);
+        return true;
+      } catch {
+        return false;
       }
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
+      clearForeignBackendSession(sess).then((cleared) => {
+        if (cleared) return;
+        setSession(sess);
+        setUser(sess?.user ?? null);
+        setLoading(false);
+        if (sess?.user) {
+          // Only re-hydrate when the user actually changes — avoids extra
+          // profile fetches on TOKEN_REFRESHED / INITIAL_SESSION which cause
+          // loading flashes during login.
+          if (lastUidRef.current !== sess.user.id) {
+            lastUidRef.current = sess.user.id;
+            setProfileLoading(true); // set synchronously to avoid race with route guards
+            setTimeout(() => hydrate(sess.user), 0);
+          }
+        } else {
+          lastUidRef.current = null;
+          setRole(null);
+          setPermissions(null);
+          setProfile(null);
+          setProfileLoading(false);
+          clearLocal();
+        }
+      });
     });
 
-    supabase.auth.getSession().then(({ data: { session: sess } }) => {
-      setSession(sess);
+    supabase.auth.getSession().then(async ({ data: { session: sess } }) => {
+      if (await clearForeignBackendSession(sess)) return;
       setUser(sess?.user ?? null);
-      if (sess?.user && lastUidRef.current !== sess.user.id) {
-        lastUidRef.current = sess.user.id;
-        setProfileLoading(true);
-        hydrate(sess.user);
+      if (sess?.user) {
+        if (lastUidRef.current !== sess.user.id) {
+          lastUidRef.current = sess.user.id;
+          setProfileLoading(true);
+          hydrate(sess.user);
+        }
       }
+      setSession(sess);
       setLoading(false);
     });
 
