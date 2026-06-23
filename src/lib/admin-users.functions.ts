@@ -89,6 +89,38 @@ function generateTempPassword(): string {
   return out;
 }
 
+function isMissingTelesalesReportPermissionColumn(error: unknown): boolean {
+  const e = error as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown };
+  const text = [e?.code, e?.message, e?.details, e?.hint].filter(Boolean).join(" ");
+  return (
+    text.includes("can_view_telesales_reports") &&
+    (/PGRST204|42703|schema cache|does not exist/i.test(text))
+  );
+}
+
+function withoutTelesalesReportPermission(permissions: z.infer<typeof Permissions>) {
+  const { can_view_telesales_reports: _missingOnLegacyBackends, ...legacySafePermissions } = permissions;
+  return legacySafePermissions;
+}
+
+async function upsertUserPermissions(
+  db: any,
+  userId: string,
+  permissions: z.infer<typeof Permissions>,
+) {
+  const { error } = await db
+    .from("user_permissions")
+    .upsert({ user_id: userId, ...permissions } as never, { onConflict: "user_id" });
+
+  if (!error) return;
+  if (!isMissingTelesalesReportPermissionColumn(error)) throw new Error(error.message);
+
+  const { error: legacyError } = await db
+    .from("user_permissions")
+    .upsert({ user_id: userId, ...withoutTelesalesReportPermission(permissions) } as never, { onConflict: "user_id" });
+  if (legacyError) throw new Error(legacyError.message);
+}
+
 async function upsertPendingInvite(
   db: any,
   email: string,
@@ -267,10 +299,7 @@ export const updateStaffPermissions = createServerFn({ method: "POST" })
       if (roleInsErr) throw new Error(roleInsErr.message);
     }
 
-    const { error } = await supabaseAdmin
-      .from("user_permissions")
-      .upsert({ user_id: data.userId, ...data.permissions } as never, { onConflict: "user_id" });
-    if (error) throw new Error(error.message);
+    await upsertUserPermissions(supabaseAdmin, data.userId, data.permissions);
 
     return { ok: true, pending: false, role: appliedRole };
   });
@@ -358,10 +387,7 @@ async function grantStaffAccess(
   const { error: roleInsErr } = await db.from("user_roles").insert({ user_id: userId, role });
   if (roleInsErr) throw new Error(roleInsErr.message);
 
-  const { error: permErr } = await db
-    .from("user_permissions")
-    .upsert({ user_id: userId, ...permissions } as never, { onConflict: "user_id" });
-  if (permErr) throw new Error(permErr.message);
+  await upsertUserPermissions(db, userId, permissions);
 
   const { error: profileErr } = await db
     .from("profiles")
