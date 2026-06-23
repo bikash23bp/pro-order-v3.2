@@ -467,6 +467,33 @@ export const getOrderFilterOptions = createServerFn({ method: "GET" })
 const EXPORT_CHUNK = 1000;
 const EXPORT_SAFETY_CAP = 500_000;
 
+const FlagInput = z.object({
+  orders: z
+    .array(
+      z.object({
+        id: z.string(),
+        phone: z.string().nullable().optional(),
+        email: z.string().nullable().optional(),
+        status: z.string().nullable().optional(),
+      }),
+    )
+    .max(200),
+});
+
+export const getOrderListFlags = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => FlagInput.parse(input ?? { orders: [] }))
+  .handler(async ({ data, context }) => {
+    if (!data.orders.length) return {} as Record<string, { is_vip: boolean; is_repeat: boolean; is_duplicate: boolean; returned_count: number }>;
+    const flat = data.orders.map((o) => ({
+      id: o.id,
+      customer_phone: o.phone ?? "",
+      customer_email: o.email ?? "",
+      status: o.status ?? "",
+    }));
+    return await getVisibleOrderFlags(context.supabase, flat);
+  });
+
 async function fetchAllByIds(supabase: any, ids: string[], selectCols: string) {
   const out: any[] = [];
   for (let i = 0; i < ids.length; i += EXPORT_CHUNK) {
