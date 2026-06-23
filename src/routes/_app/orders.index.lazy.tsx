@@ -733,8 +733,7 @@ function OrdersPage() {
       } catch { /* non-fatal */ }
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleFlagKey]);
+  }, [visibleFlagKey, session, rows, fetchOrderFlags, queryClient, ordersQueryKey]);
 
 
   // ============ Tab counts query ============
