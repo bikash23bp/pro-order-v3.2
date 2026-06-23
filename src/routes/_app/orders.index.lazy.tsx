@@ -591,6 +591,7 @@ function OrdersPage() {
   const serverPage = ordersQuery.data?.currentPage ?? page;
   const loading = ordersQuery.isPending;
   const refreshing = ordersQuery.isFetching && !ordersQuery.isPending;
+  const listTimedOut = Boolean((ordersQuery.data as { timedOut?: boolean } | undefined)?.timedOut);
   const listLoadFailed = ordersQuery.isError && !ordersQuery.data;
 
   useEffect(() => {
@@ -1546,6 +1547,8 @@ function OrdersPage() {
 
           {loading ? (
             <div className="p-8 text-center text-muted-foreground">Loading…</div>
+          ) : listTimedOut ? (
+            <div className="p-12 text-center text-muted-foreground">This filter is taking too long. Try search/date filters or refresh.</div>
           ) : listLoadFailed ? (
             <div className="p-12 text-center text-muted-foreground">Orders could not load. Please refresh.</div>
           ) : totalCount === 0 ? (
