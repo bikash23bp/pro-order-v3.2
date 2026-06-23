@@ -4,7 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { toAsciiDigits, normalizeBDPhone } from "@/lib/phone-paste";
 
 const OrdersInput = z.object({
-  status: z.string().default("processing"),
+  status: z.string().default("all"),
   page: z.number().int().min(1).default(1),
   limit: z.number().int().min(1).max(100).default(10),
   source: z.string().default("all"),

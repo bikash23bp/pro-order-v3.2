@@ -1624,6 +1624,8 @@ function OrdersPage() {
             <div className="p-12 text-center text-muted-foreground">This filter is taking too long. Try search/date filters or refresh.</div>
           ) : listLoadFailed ? (
             <div className="p-12 text-center text-muted-foreground">Orders could not load. Please refresh.</div>
+          ) : totalCount === 0 && countsPriming ? (
+            <div className="p-12 text-center text-muted-foreground">Loading orders…</div>
           ) : totalCount === 0 ? (
             <div className="p-12 text-center text-muted-foreground">No orders found.</div>
           ) : (
