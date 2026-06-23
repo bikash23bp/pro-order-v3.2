@@ -3369,6 +3369,13 @@ export type Database = {
         }[]
       }
       normalize_phone: { Args: { p_phone: string }; Returns: string }
+      postgres_fdw_disconnect: { Args: { "": string }; Returns: boolean }
+      postgres_fdw_disconnect_all: { Args: never; Returns: boolean }
+      postgres_fdw_get_connections: {
+        Args: never
+        Returns: Record<string, unknown>[]
+      }
+      postgres_fdw_handler: { Args: never; Returns: unknown }
       search_task_customers: {
         Args: { p_query: string }
         Returns: {
