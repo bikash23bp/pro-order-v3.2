@@ -52,8 +52,7 @@ export const createStaffUser = createServerFn({ method: "POST" })
       return { id: existingProfile.id, email, pending: false };
     }
 
-    // 2. Create the auth user directly. The old pending-invite flow was removed,
-    //    so this must not depend on public.pending_user_invites existing.
+    // 2. Create the auth user directly.
     const password = data.password ?? generateTempPassword();
     const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
       email,
