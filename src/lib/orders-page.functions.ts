@@ -210,6 +210,9 @@ function applyFilters(qb: any, data: z.infer<typeof OrdersInput>) {
   if (data.status === "partner_cancelled") return qb.eq("source", "oms").eq("status", "cancelled");
   if (data.status === "preorder") return qb.eq("preorder", true);
   if (data.status === "sent_to_partner") return qb.not("forwarded_to_partner_at", "is", null);
+  if (data.status === "sent_to_partner_pending") return qb.not("forwarded_to_partner_at", "is", null).eq("status", "pending");
+  if (data.status === "sent_to_partner_ready_to_ship") return qb.not("forwarded_to_partner_at", "is", null).eq("status", "ready_to_ship");
+  if (data.status === "sent_to_partner_cancelled") return qb.not("forwarded_to_partner_at", "is", null).eq("status", "cancelled");
   if (data.status === "all") return qb;
 
   // "pending" এখন স্বাধীন স্ট্যাটাস — শুধু status=pending
