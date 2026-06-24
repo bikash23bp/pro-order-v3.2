@@ -77,7 +77,7 @@ export const listCustomers = createServerFn({ method: "POST" })
     const sortBy = SORT_COLS.has(data.sortBy ?? "") ? (data.sortBy as string) : "total_spent";
     const sortDir = data.sortDir ?? "desc";
 
-    let q = supabase.from("customer_stats").select("*", { count: "exact" });
+    let q = supabase.from("customer_stats").select("*");
     if (data.q) {
       const s = data.q.replace(/[%_,]/g, " ").trim();
       if (s) {
@@ -101,20 +101,24 @@ export const listCustomers = createServerFn({ method: "POST" })
     }
 
     const from = (page - 1) * limit;
-    const to = from + limit - 1;
-    const [{ data: rows, count, error }, t] = await Promise.all([
+    const to = from + limit;
+    const [{ data: rawRows, error }, t] = await Promise.all([
       q.order(sortBy, { ascending: sortDir === "asc", nullsFirst: false }).range(from, to),
       getThresholds(supabase),
     ]);
     if (error) throw new Error(error.message);
 
-    const phones = ((rows ?? []) as any[]).map((r) => r.phone).filter(Boolean);
+    const fetchedRows = (rawRows ?? []) as any[];
+    const hasMore = fetchedRows.length > limit;
+    const rows = fetchedRows.slice(0, limit);
+
+    const phones = rows.map((r) => r.phone).filter(Boolean);
     let enrich: Record<string, { sources: string[]; products: string[]; has_discount: boolean; tags: CustomerTag[]; tag_details: CustomerTagDetail[] }> = {};
     if (data.enrich !== false && phones.length) {
       enrich = await enrichPhones(supabase, phones);
     }
 
-    const out = ((rows ?? []) as any[]).map((r) => {
+    const out = rows.map((r) => {
       const e = enrich[r.phone];
       return {
         ...r,
@@ -130,7 +134,7 @@ export const listCustomers = createServerFn({ method: "POST" })
       } as CustomerStat;
     });
 
-    return { rows: out, total: count ?? out.length };
+    return { rows: out, total: hasMore ? from + limit + 1 : from + out.length };
   });
 
 async function enrichPhones(supabase: any, phones: string[]) {
