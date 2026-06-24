@@ -45,7 +45,6 @@ type Row = {
   avatar_url: string | null;
   is_blocked: boolean;
   chat_force_popup: boolean;
-  pending: boolean;
   role: AppRole;
   permissions: AppPermissions;
 };
@@ -133,7 +132,6 @@ function UsersPage() {
       avatar_url: p.avatar_url,
       is_blocked: (p as { is_blocked?: boolean }).is_blocked ?? false,
       chat_force_popup: (p as { chat_force_popup?: boolean }).chat_force_popup ?? false,
-      pending: Boolean(p.pending),
       role: (p.role ?? "user_request") as AppRole,
       permissions: normalizePermissions(p.permissions as Partial<AppPermissions> | undefined),
       }));
@@ -176,7 +174,7 @@ const isMainAdmin = (email: string | null) => (email ?? "").toLowerCase() === MA
     setRows((prev) => prev.map((r) => r.id === userId ? { ...r, role } : r));
     try {
       await saveRole({ data: { userId, role } });
-      toast.success(target?.pending ? "Pending role saved" : "Role updated");
+      toast.success("Role updated");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to update role");
       load();
@@ -217,12 +215,11 @@ const isMainAdmin = (email: string | null) => (email ?? "").toLowerCase() === MA
     }
     setSavingId(row.id);
     try {
-      const approvedRole: AppRole = row.role === "user_request" ? "staff" : row.role;
-      const result = await savePermissions({ data: { userId: row.id, permissions: row.permissions, role: approvedRole } });
+      const result = await savePermissions({ data: { userId: row.id, permissions: row.permissions, role: row.role } });
       await saveSiteAccess({ data: { userId: row.id, siteIds: siteAccess[row.id] ?? [] } });
       await saveOmsAccess({ data: { userId: row.id, senderNames: omsAccess[row.id] ?? [] } });
-      setRows((prev) => prev.map((r) => r.id === row.id ? { ...r, role: (result?.role ?? approvedRole) as AppRole, pending: false } : r));
-      toast.success(row.pending || row.role === "user_request" ? "User access approved" : "Permissions saved");
+      setRows((prev) => prev.map((r) => r.id === row.id ? { ...r, role: (result?.role ?? row.role) as AppRole } : r));
+      toast.success("Permissions saved");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save permissions");
       load();
@@ -249,7 +246,7 @@ const isMainAdmin = (email: string | null) => (email ?? "").toLowerCase() === MA
               Email: r.email ?? "",
               Name: r.full_name ?? "",
               Role: r.role,
-              Status: r.is_blocked ? "Blocked" : r.pending ? "Pending" : "Active",
+              Status: r.is_blocked ? "Blocked" : "Active",
             }))}
           />
           <AddUserDialog onCreated={load} />
@@ -286,7 +283,7 @@ const isMainAdmin = (email: string | null) => (email ?? "").toLowerCase() === MA
                       <button
                         type="button"
                         onClick={() => onPickAvatar(r.id)}
-                        disabled={uploadingId === r.id || r.pending}
+                        disabled={uploadingId === r.id}
                         className="group relative shrink-0 rounded-full ring-1 ring-border transition hover:ring-primary/60"
                         aria-label="Change profile photo"
                       >
@@ -303,7 +300,6 @@ const isMainAdmin = (email: string | null) => (email ?? "").toLowerCase() === MA
                       <div>
                         <div className="font-medium flex items-center gap-1.5">
                           {r.full_name ?? "—"}
-                          {r.pending && <Badge variant="outline" className="text-[10px]">Pending signup</Badge>}
                           {r.is_blocked && <Badge variant="outline" className="text-[10px] bg-red-500/15 text-red-400 border-red-500/30">Blocked</Badge>}
                         </div>
                         <div className="text-xs text-muted-foreground">{r.email}</div>
