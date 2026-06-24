@@ -40,6 +40,7 @@ export type TeleRow = {
   order_count: number;
   complaint_count: number;
   order_id: string | null;
+  duplicate_count?: number;
 };
 
 export type TeleStaff = { id: string; name: string };
