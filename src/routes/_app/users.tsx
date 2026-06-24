@@ -30,10 +30,8 @@ import { useRef } from "react";
 
 import {
   PERMISSION_GROUPS,
-  ALL_PERMISSION_KEYS,
   normalizePermissions,
   type AppPermissions,
-  type PermissionKey,
 } from "@/lib/permissions";
 
 type AppRole = "business_owner" | "admin" | "manager" | "staff" | "user_request";
