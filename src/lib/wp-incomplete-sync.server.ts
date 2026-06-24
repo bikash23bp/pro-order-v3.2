@@ -285,6 +285,29 @@ export async function importWpIncompleteRows(
       continue;
     }
 
+    // If a real Woo order already exists for this phone (placed in the same
+    // session after the abandoned cart), skip importing the incomplete row.
+    if (!existingOrderId) {
+      const last10 = phone.replace(/\D/g, "").slice(-10);
+      if (last10.length >= 7) {
+        const { data: realOrders } = await supabase
+          .from("orders")
+          .select("id, customer_phone")
+          .eq("source", "woocommerce")
+          .eq("source_site_id", site.id)
+          .limit(2000);
+        const matched = (realOrders ?? []).some(
+          (r: { customer_phone: string | null }) =>
+            (r.customer_phone || "").replace(/\D/g, "").slice(-10) === last10,
+        );
+        if (matched) {
+          result.skipped_dup++;
+          result.imported_ids.push(row.id);
+          continue;
+        }
+      }
+    }
+
     const items = (row.items ?? []).map((it) => ({
       ...it,
       quantity: Math.max(1, Number(it.quantity ?? it.qty ?? 1)),
