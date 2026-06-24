@@ -49,7 +49,7 @@ export const createStaffUser = createServerFn({ method: "POST" })
         });
         if (pwErr) throw new Error(pwErr.message);
       }
-      return { id: existingProfile.id, email, pending: false };
+      return { id: existingProfile.id, email };
     }
 
     // 2. Create the auth user directly.
@@ -75,7 +75,6 @@ export const createStaffUser = createServerFn({ method: "POST" })
     return {
       id: newUserId,
       email,
-      pending: false,
       tempPassword: data.password ? undefined : password,
     };
   });
@@ -139,7 +138,6 @@ export const listStaffUsers = createServerFn({ method: "GET" })
       .filter((p) => roleMap.has(p.id))
       .map((p) => ({
         ...p,
-        pending: roleMap.get(p.id) === "user_request",
         role: roleMap.get(p.id) ?? "user_request",
         permissions: permMap.get(p.id) ?? {},
       }));
@@ -226,7 +224,7 @@ export const updateStaffPermissions = createServerFn({ method: "POST" })
 
     await upsertUserPermissions(supabaseAdmin, data.userId, data.permissions);
 
-    return { ok: true, pending: false, role: appliedRole };
+    return { ok: true, role: appliedRole };
   });
 
 export const uploadStaffAvatar = createServerFn({ method: "POST" })
