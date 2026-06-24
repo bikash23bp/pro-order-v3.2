@@ -1716,9 +1716,19 @@ function OrdersPage() {
           {loading ? (
             <div className="p-8 text-center text-muted-foreground">Loading…</div>
           ) : listTimedOut ? (
-            <div className="p-12 text-center text-muted-foreground">This filter is taking too long. Try search/date filters or refresh.</div>
+            <div className="p-12 text-center text-muted-foreground space-y-3">
+              <div>This filter is taking too long. Try search/date filters or retry.</div>
+              <Button size="sm" variant="outline" onClick={() => ordersQuery.refetch()} disabled={ordersQuery.isFetching}>
+                {ordersQuery.isFetching ? "Retrying…" : "Retry"}
+              </Button>
+            </div>
           ) : listLoadFailed ? (
-            <div className="p-12 text-center text-muted-foreground">Orders could not load. Please refresh.</div>
+            <div className="p-12 text-center text-muted-foreground space-y-3">
+              <div>Orders could not load.</div>
+              <Button size="sm" variant="outline" onClick={() => ordersQuery.refetch()} disabled={ordersQuery.isFetching}>
+                {ordersQuery.isFetching ? "Retrying…" : "Retry"}
+              </Button>
+            </div>
           ) : totalCount === 0 && countsPriming ? (
             <div className="p-12 text-center text-muted-foreground">Loading orders…</div>
           ) : totalCount === 0 ? (
