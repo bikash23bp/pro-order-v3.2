@@ -39,6 +39,7 @@ function makePreviewProps(): TeleTemplateProps {
       onOpenDetail: () => {},
       onSaveNote: async () => {},
       onOpenComplaints: () => {},
+      onOpenReviews: () => {},
     },
   };
 }
