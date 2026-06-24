@@ -205,6 +205,9 @@ function applyFilters(qb: any, data: z.infer<typeof OrdersInput>) {
   if (data.status === "web_pending" || data.status === "pending_web") return qb.eq("status", "pending_web");
   if (data.status === "facebook") return qb.eq("source", "facebook");
   if (data.status === "partner") return qb.eq("source", "oms");
+  if (data.status === "partner_pending") return qb.eq("source", "oms").eq("status", "pending");
+  if (data.status === "partner_ready_to_ship") return qb.eq("source", "oms").eq("status", "ready_to_ship");
+  if (data.status === "partner_cancelled") return qb.eq("source", "oms").eq("status", "cancelled");
   if (data.status === "preorder") return qb.eq("preorder", true);
   if (data.status === "sent_to_partner") return qb.not("forwarded_to_partner_at", "is", null);
   if (data.status === "all") return qb;

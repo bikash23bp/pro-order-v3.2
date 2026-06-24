@@ -837,6 +837,9 @@ function OrdersPage() {
     if (tab === "web_pending" || tab === "pending_web") return (r.status as string) === "pending_web";
     if (tab === "facebook") return r.source === "facebook";
     if (tab === "partner") return r.source === "oms";
+    if (tab === "partner_pending") return r.source === "oms" && r.status === "pending";
+    if (tab === "partner_ready_to_ship") return r.source === "oms" && r.status === "ready_to_ship";
+    if (tab === "partner_cancelled") return r.source === "oms" && r.status === "cancelled";
     if (tab === "preorder") return !!r.preorder;
     if (tab === "sent_to_partner") return !!(r as { forwarded_to_partner_at?: string | null }).forwarded_to_partner_at;
     return r.status === tab;
@@ -1510,7 +1513,9 @@ function OrdersPage() {
             <div className={`${tabsOpen ? "grid" : "hidden"} sm:grid grid-cols-[repeat(auto-fit,minmax(78px,1fr))] gap-1.5`}>
               {PRIMARY_TABS.map((tab) => {
                 const c = TAB_COLOR_CLASSES[tab.color];
-                const active = effectiveStatusFilter === tab.key;
+                const active = tab.key === "partner"
+                  ? effectiveStatusFilter.startsWith("partner")
+                  : effectiveStatusFilter === tab.key;
                 const isPreorderAlert = tab.key === "preorder" && preorderDueCount > 0;
                 const baseTile = "flex flex-col items-center justify-center rounded-md border-2 px-1.5 py-1 w-full min-w-0 transition-colors cursor-pointer select-none";
                 const cls = isPreorderAlert
@@ -1561,6 +1566,34 @@ function OrdersPage() {
             </div>
             </div>
           </div>
+          {effectiveStatusFilter.startsWith("partner") && (
+            <div className="flex flex-wrap items-center gap-1.5 px-3 sm:px-4 pb-2">
+              <span className="text-[11px] font-medium text-muted-foreground mr-1">Partner sub-filter:</span>
+              {[
+                { key: "partner", label: "All" },
+                { key: "partner_pending", label: "Pending" },
+                { key: "partner_ready_to_ship", label: "Ready to Ship" },
+                { key: "partner_cancelled", label: "Cancelled" },
+              ].map((sf) => {
+                const active = effectiveStatusFilter === sf.key;
+                return (
+                  <button
+                    key={sf.key}
+                    type="button"
+                    onClick={() => selectOrderTab(sf.key)}
+                    onMouseEnter={() => prefetchOrderTab(sf.key)}
+                    className={`px-2.5 py-1 rounded-md border text-[11px] font-medium transition-colors ${
+                      active
+                        ? "bg-[#00B795] text-white border-[#00B795]"
+                        : "border-fuchsia-500/50 hover:bg-fuchsia-500/15"
+                    }`}
+                  >
+                    {sf.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </CardHeader>
         {selected.size > 0 && (
           <div className="sticky top-0 z-30 flex flex-wrap items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 border-y bg-green-600 text-white shadow-sm animate-in slide-in-from-top-2 [&_button]:h-7 [&_button]:px-2 [&_button]:text-[11px] sm:[&_button]:h-8 sm:[&_button]:px-3 sm:[&_button]:text-xs">
