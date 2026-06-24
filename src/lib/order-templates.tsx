@@ -686,7 +686,16 @@ function MobilePhoto(p: OrderTemplateProps) {
     }`}>
       {heroImg ? (
         <div className="relative h-32 bg-muted">
-          <img src={heroImg} alt="" loading="lazy" className="w-full h-full object-cover" />
+          <a
+            href={heroImg}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            title="ছবি পুরো সাইজে দেখুন"
+            className="absolute inset-0 block"
+          >
+            <img src={heroImg} alt="" loading="lazy" className="w-full h-full object-cover cursor-zoom-in" />
+          </a>
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
           <div className="absolute top-2 left-2"><Checkbox checked={flags.isSelected} onCheckedChange={() => actions.toggleOne(order.id)} /></div>
           <div className="absolute top-2 right-2"><StatusSelect order={order} actions={actions} size="sm" /></div>
