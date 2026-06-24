@@ -12,6 +12,31 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 
+// ---- Image helpers ----
+// Supabase Storage render endpoint supports on-the-fly width/quality/format
+// transforms via `/storage/v1/render/image/public/...?width=&quality=&format=`.
+// For non-Supabase URLs we return the original src unchanged.
+function transformImg(src: string, width: number, quality = 70): string {
+  try {
+    const u = new URL(src);
+    if (u.pathname.includes("/storage/v1/object/public/")) {
+      u.pathname = u.pathname.replace(
+        "/storage/v1/object/public/",
+        "/storage/v1/render/image/public/",
+      );
+    }
+    if (u.pathname.includes("/storage/v1/render/image/public/")) {
+      u.searchParams.set("width", String(width));
+      u.searchParams.set("quality", String(quality));
+      u.searchParams.set("resize", "cover");
+      return u.toString();
+    }
+    return src;
+  } catch {
+    return src;
+  }
+}
+
 // ----------------- Types -----------------
 
 export type OrderStatus =
@@ -206,17 +231,20 @@ function ItemsList({ order, dense = false }: { order: OrderForTemplate; dense?: 
   const items = order.order_items ?? [];
   if (items.length === 0) return null;
   const size = dense ? "h-8 w-8" : "h-10 w-10";
+  const pxBase = dense ? 32 : 40; // matches Tailwind h/w
+  const pxDpr = pxBase * 2;       // serve 2x for retina
   return (
     <div className={`space-y-1.5 ${dense ? "" : "pt-2 mt-1 border-t border-dashed border-border/60"}`}>
       {items.map((it, i) => {
         const img = it.product_variants?.image_url ?? it.products?.image_url ?? null;
+        const thumb = img ? transformImg(img, pxDpr, 65) : null;
         const attrs = it.product_variants?.attributes;
         const variantLabel = attrs && typeof attrs === "object"
           ? Object.values(attrs).filter(Boolean).join(", ")
           : "";
         return (
           <div key={i} className="flex items-center gap-2">
-            {img ? (
+            {img && thumb ? (
               <a
                 href={img}
                 target="_blank"
@@ -226,9 +254,13 @@ function ItemsList({ order, dense = false }: { order: OrderForTemplate; dense?: 
                 className="shrink-0"
               >
                 <img
-                  src={img}
+                  src={thumb}
                   alt={it.products?.name ?? ""}
                   loading="lazy"
+                  decoding="async"
+                  width={pxBase}
+                  height={pxBase}
+                  sizes={`${pxBase}px`}
                   className={`${size} rounded-md border border-border/60 object-cover bg-muted cursor-zoom-in hover:opacity-90 transition`}
                 />
               </a>
@@ -680,11 +712,12 @@ function MobilePhoto(p: OrderTemplateProps) {
   const { order, flags, actions } = p;
   const firstItem = (order.order_items ?? [])[0];
   const heroImg = firstItem?.product_variants?.image_url ?? firstItem?.products?.image_url ?? null;
+  const heroThumb = heroImg ? transformImg(heroImg, 800, 70) : null;
   return (
     <div className={`rounded-xl border bg-card overflow-hidden ${
       flags.isSelected ? "border-primary/50 ring-1 ring-primary/30" : "border-border/60"
     }`}>
-      {heroImg ? (
+      {heroImg && heroThumb ? (
         <div className="relative h-32 bg-muted">
           <a
             href={heroImg}
@@ -694,7 +727,14 @@ function MobilePhoto(p: OrderTemplateProps) {
             title="ছবি পুরো সাইজে দেখুন"
             className="absolute inset-0 block"
           >
-            <img src={heroImg} alt="" loading="lazy" className="w-full h-full object-cover cursor-zoom-in" />
+            <img
+              src={heroThumb}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              sizes="(max-width: 640px) 100vw, 400px"
+              className="w-full h-full object-cover cursor-zoom-in"
+            />
           </a>
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
           <div className="absolute top-2 left-2"><Checkbox checked={flags.isSelected} onCheckedChange={() => actions.toggleOne(order.id)} /></div>
