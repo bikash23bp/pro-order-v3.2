@@ -974,6 +974,14 @@ function DetailDialog({
                 </Button>
                 <Button
                   size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => setReviewOpen(true)}
+                >
+                  <Star className="h-3.5 w-3.5" /> Review
+                </Button>
+                <Button
+                  size="sm"
                   variant="destructive"
                   className="h-7 px-2 text-xs"
                   onClick={() => setBlockOpen(true)}
@@ -993,6 +1001,14 @@ function DetailDialog({
           <ComplaintDialog
             open={complaintOpen}
             onOpenChange={setComplaintOpen}
+            phone={data.customer.phone}
+            customerName={data.customer.name ?? null}
+          />
+        )}
+        {data?.customer?.phone && (
+          <ReviewDialog
+            open={reviewOpen}
+            onOpenChange={setReviewOpen}
             phone={data.customer.phone}
             customerName={data.customer.name ?? null}
           />
