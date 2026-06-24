@@ -421,6 +421,7 @@ function TelesalesPage() {
                           order_count: r.order_count,
                           complaint_count: r.complaint_count,
                           order_id: r.order_id,
+                          duplicate_count: r.duplicate_count,
                         },
                         isSelected: selected.has(r.id),
                         staff,
