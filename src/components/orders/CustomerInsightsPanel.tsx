@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { History, Shield, ShieldAlert, Loader2, Tags, MessageSquareWarning, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { History, Shield, ShieldAlert, Loader2, Tags, MessageSquareWarning, AlertTriangle, CheckCircle2, Star } from "lucide-react";
 import pathaoLogo from "@/assets/couriers/pathao.png";
 import redxLogo from "@/assets/couriers/redx.png";
 import steadfastLogo from "@/assets/couriers/steadfast.png";
@@ -14,6 +14,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { CUSTOMER_TAGS, TAG_LABEL, TAG_TONE, type CustomerTag } from "@/lib/tags.functions";
 import { countOpenComplaintsByPhone } from "@/lib/complaints.functions";
 import { ComplaintDialog } from "@/components/complaints/ComplaintDialog";
+import { ReviewDialog } from "@/components/reviews/ReviewDialog";
+import { reviewSummaryByPhone } from "@/lib/reviews.functions";
 import { OrderDetailDialog, type DetailOrder } from "@/components/orders/OrderDetailDialog";
 
 type HistoryData = Awaited<ReturnType<typeof getCustomerHistoryByPhone>>;
@@ -60,12 +62,14 @@ function saveFraudLS(phone: string, value: FraudReport) {
   } catch { /* ignore quota errors */ }
 }
 
-export function CustomerInsightsPanel({ phone }: { phone: string }) {
+export function CustomerInsightsPanel({ phone, orderId }: { phone: string; orderId?: string | null }) {
   const [history, setHistory] = useState<HistoryData | null>(null);
   const [fraud, setFraud] = useState<FraudReport | null>(null);
   const [tags, setTags] = useState<CustomerTag[]>([]);
   const [openComplaints, setOpenComplaints] = useState(0);
   const [showComplaints, setShowComplaints] = useState(false);
+  const [showReviews, setShowReviews] = useState(false);
+  const [reviewSummary, setReviewSummary] = useState<{ count: number; avg: number }>({ count: 0, avg: 0 });
   const [loading, setLoading] = useState(false);
   const [fraudLoading, setFraudLoading] = useState(false);
   const [viewOrder, setViewOrder] = useState<DetailOrder | null>(null);
@@ -73,6 +77,7 @@ export function CustomerInsightsPanel({ phone }: { phone: string }) {
   const fetchHistory = useServerFn(getCustomerHistoryByPhone);
   const fetchFraud = useServerFn(checkPhoneFraud);
   const countComplaints = useServerFn(countOpenComplaintsByPhone);
+  const fetchReviewSummary = useServerFn(reviewSummaryByPhone);
 
   const openOrder = async (orderId: string) => {
     setLoadingOrderId(orderId);
@@ -93,6 +98,14 @@ export function CustomerInsightsPanel({ phone }: { phone: string }) {
   };
 
   const trimmedPhone = phone.trim();
+
+  const loadReviewSummary = async () => {
+    if (trimmedPhone.replace(/\D/g, "").length < 6) return;
+    try { setReviewSummary(await fetchReviewSummary({ data: { phone: trimmedPhone } })); }
+    catch { /* ignore */ }
+  };
+
+  useEffect(() => { loadReviewSummary(); }, [trimmedPhone]);
 
   useEffect(() => {
     const trimmed = phone.trim();
@@ -208,6 +221,24 @@ export function CustomerInsightsPanel({ phone }: { phone: string }) {
           }}
           phone={trimmedPhone}
           customerName={null}
+        />
+      )}
+      {trimmedPhone.replace(/\D/g, "").length >= 6 && (
+        <Button size="sm" variant="ghost" className="w-full justify-start text-xs"
+          onClick={() => setShowReviews(true)}>
+          <Star className="h-3.5 w-3.5 mr-1 text-amber-400 fill-amber-400" />
+          {reviewSummary.count > 0
+            ? `${reviewSummary.avg.toFixed(1)} ★ • ${reviewSummary.count} review${reviewSummary.count > 1 ? "s" : ""}`
+            : "Add / view reviews"}
+        </Button>
+      )}
+      {showReviews && (
+        <ReviewDialog
+          open={showReviews}
+          onOpenChange={async (v) => { setShowReviews(v); if (!v) await loadReviewSummary(); }}
+          phone={trimmedPhone}
+          customerName={null}
+          orderId={orderId ?? null}
         />
       )}
       {tags.length > 0 && (

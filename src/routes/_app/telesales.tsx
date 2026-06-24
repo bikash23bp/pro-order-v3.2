@@ -46,10 +46,11 @@ import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { BlockCustomerDialog } from "@/components/customers/BlockCustomerDialog";
 import { ComplaintDialog } from "@/components/complaints/ComplaintDialog";
+import { ReviewDialog } from "@/components/reviews/ReviewDialog";
 import { OrderDetailDialog, type DetailOrder } from "@/components/orders/OrderDetailDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { MessageSquareWarning } from "lucide-react";
+import { MessageSquareWarning, Star } from "lucide-react";
 
 export const Route = createFileRoute("/_app/telesales")({
   head: () => ({ meta: [{ title: "TeleSales — OMS" }] }),
@@ -108,6 +109,7 @@ function TelesalesPage() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [complaintFor, setComplaintFor] = useState<{ phone: string; name: string | null } | null>(null);
+  const [reviewFor, setReviewFor] = useState<{ phone: string; name: string | null } | null>(null);
 
   const { desktopTemplate, mobileTemplate } = useTeleTemplate();
   const isMobile = useIsMobile();
@@ -395,6 +397,7 @@ function TelesalesPage() {
                     onAction: (id, action) => onAction(id, action),
                     onOpenDetail: (id) => setDetailId(id),
                     onOpenComplaints: (phone, name) => setComplaintFor({ phone, name }),
+                    onOpenReviews: (phone, name) => setReviewFor({ phone, name }),
                     onSaveNote: async (id, note) => {
                       await updateFn({ data: { id, note } });
                       setRows((prev) => prev.map((x) => x.id === id ? { ...x, note } : x));
@@ -483,6 +486,15 @@ function TelesalesPage() {
           onOpenChange={(v) => { if (!v) setComplaintFor(null); }}
           phone={complaintFor.phone}
           customerName={complaintFor.name}
+        />
+      )}
+
+      {reviewFor && (
+        <ReviewDialog
+          open={!!reviewFor}
+          onOpenChange={(v) => { if (!v) setReviewFor(null); }}
+          phone={reviewFor.phone}
+          customerName={reviewFor.name}
         />
       )}
     </div>
@@ -903,6 +915,7 @@ function DetailDialog({
   const [note, setNote] = useState("");
   const [blockOpen, setBlockOpen] = useState(false);
   const [complaintOpen, setComplaintOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [viewOrder, setViewOrder] = useState<DetailOrder | null>(null);
   const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
 
@@ -961,6 +974,14 @@ function DetailDialog({
                 </Button>
                 <Button
                   size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => setReviewOpen(true)}
+                >
+                  <Star className="h-3.5 w-3.5" /> Review
+                </Button>
+                <Button
+                  size="sm"
                   variant="destructive"
                   className="h-7 px-2 text-xs"
                   onClick={() => setBlockOpen(true)}
@@ -980,6 +1001,14 @@ function DetailDialog({
           <ComplaintDialog
             open={complaintOpen}
             onOpenChange={setComplaintOpen}
+            phone={data.customer.phone}
+            customerName={data.customer.name ?? null}
+          />
+        )}
+        {data?.customer?.phone && (
+          <ReviewDialog
+            open={reviewOpen}
+            onOpenChange={setReviewOpen}
             phone={data.customer.phone}
             customerName={data.customer.name ?? null}
           />

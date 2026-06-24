@@ -3,11 +3,50 @@ import { Link } from "@tanstack/react-router";
 import {
   Eye, Pencil, Trash2, FileText, Phone, Truck, StickyNote, Crown, Package,
 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Star } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { MemberBadge } from "@/components/MemberBadge";
 import { DuplicateBadge } from "@/components/orders/DuplicateBadge";
+
+// In-memory cache so the same order doesn't re-fetch on every re-render / page swap.
+const reviewCache = new Map<string, { count: number; avg: number }>();
+
+function OrderReviewBadge({ orderId }: { orderId: string }) {
+  const [s, setS] = useState<{ count: number; avg: number } | null>(
+    () => reviewCache.get(orderId) ?? null,
+  );
+  useEffect(() => {
+    if (reviewCache.has(orderId)) { setS(reviewCache.get(orderId)!); return; }
+    let alive = true;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from("customer_reviews")
+        .select("rating")
+        .eq("order_id", orderId);
+      const arr = (data ?? []) as Array<{ rating: number }>;
+      const count = arr.length;
+      const avg = count ? arr.reduce((x, r) => x + Number(r.rating), 0) / count : 0;
+      const v = { count, avg };
+      reviewCache.set(orderId, v);
+      if (alive) setS(v);
+    })().catch(() => {});
+    return () => { alive = false; };
+  }, [orderId]);
+  if (!s || s.count === 0) return null;
+  return (
+    <span
+      className="inline-flex items-center gap-0.5 rounded border border-amber-500/40 bg-amber-500/15 text-amber-500 px-1 py-0 text-[10px] font-medium"
+      title={`${s.count} review${s.count > 1 ? "s" : ""}`}
+    >
+      <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+      {s.avg.toFixed(1)}
+    </span>
+  );
+}
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -207,6 +246,7 @@ function CustomerBadges({ order, flags, actions }: OrderTemplateProps) {
         {order.customer_name}
       </button>
       <MemberBadge phone={order.customer_phone} />
+      <OrderReviewBadge orderId={order.id} />
       {flags.isVip && (
         <Badge variant="outline" className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-[10px] px-1 py-0">
           <Crown className="h-3 w-3" /> VIP

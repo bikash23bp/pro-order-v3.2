@@ -2,7 +2,7 @@ import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
 import {
   Phone, MessageCircle, PhoneOff, PhoneMissed, Clock3, ShieldAlert,
-  PhoneCall, UserCog, Plus, StickyNote, Save, Loader2, MessageSquareWarning, ShoppingBag,
+  PhoneCall, UserCog, Plus, StickyNote, Save, Loader2, MessageSquareWarning, ShoppingBag, Star,
 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,7 @@ export type TeleTemplateActions = {
   onOpenDetail: (id: string) => void;
   onSaveNote: (id: string, note: string) => Promise<void>;
   onOpenComplaints: (phone: string, name: string | null) => void;
+  onOpenReviews: (phone: string, name: string | null) => void;
 };
 
 export type TeleTemplateProps = {
@@ -212,6 +213,20 @@ function ComplaintBadge({ row, actions }: { row: TeleRow; actions: TeleTemplateA
   );
 }
 
+function ReviewButton({ row, actions }: { row: TeleRow; actions: TeleTemplateActions }) {
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      className="h-6 px-1.5 gap-1 text-[10px]"
+      title="রিভিউ যোগ / দেখুন"
+      onClick={(e) => { e.stopPropagation(); actions.onOpenReviews(row.phone, row.name); }}
+    >
+      <Star className="h-3 w-3 text-amber-400 fill-amber-400" />
+    </Button>
+  );
+}
+
 function OrderTakenBadge({ row }: { row: TeleRow }) {
   if (!row.order_id) return null;
   return (
@@ -279,6 +294,7 @@ function NameButton({ row, actions, className = "" }: { row: TeleRow; actions: T
       <span className="shrink-0"><ComplaintBadge row={row} actions={actions} /></span>
       <span className="shrink-0"><OrderTakenBadge row={row} /></span>
       <span className="shrink-0"><DuplicateBadge row={row} /></span>
+      <span className="shrink-0"><ReviewButton row={row} actions={actions} /></span>
     </div>
   );
 }
