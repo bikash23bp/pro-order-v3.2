@@ -713,7 +713,7 @@ export function EditOrderDialog({
 
             {/* SIDEBAR */}
             <aside className="space-y-3">
-              <CustomerInsightsPanel phone={phone} />
+              <CustomerInsightsPanel phone={phone} orderId={order.id} />
               {meta?.customer_email && (
                 <div className="rounded-md border p-3 text-[11px] text-muted-foreground truncate bg-muted/30">
                   {meta.customer_email}
