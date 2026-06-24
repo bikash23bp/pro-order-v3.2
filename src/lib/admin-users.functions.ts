@@ -52,12 +52,9 @@ export const createStaffUser = createServerFn({ method: "POST" })
       return { id: existingProfile.id, email, pending: false };
     }
 
-    // 2. Save the invite first, then create the auth user.
-    //    Prefer admin.createUser with email_confirm=true so the new user can
-    //    sign in immediately without email verification (works with fake emails too).
+    // 2. Create the auth user directly. The old pending-invite flow was removed,
+    //    so this must not depend on public.pending_user_invites existing.
     const password = data.password ?? generateTempPassword();
-    await upsertPendingInvite(supabaseAdmin, email, data.fullName, data.role, perms, context.userId);
-
     const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -67,8 +64,10 @@ export const createStaffUser = createServerFn({ method: "POST" })
     if (createErr || !created?.user) {
       const message = createErr?.message ?? "Failed to create user";
       const alreadyExists = /already|exist|registered/i.test(message);
-      if (!alreadyExists) throw new Error(message);
-      return { id: null, email, pending: true };
+      if (alreadyExists) {
+        throw new Error("This email already has an auth account but no user profile. Ask the user to sign in once, then assign access from Users.");
+      }
+      throw new Error(message);
     }
     const newUserId = created.user.id;
 
@@ -121,55 +120,22 @@ async function upsertUserPermissions(
   if (legacyError) throw new Error(legacyError.message);
 }
 
-async function upsertPendingInvite(
-  db: any,
-  email: string,
-  fullName: string,
-  role: z.infer<typeof RoleEnum>,
-  permissions: z.infer<typeof Permissions>,
-  createdBy: string,
-) {
-  const { data: existingInvite, error: lookupErr } = await db
-    .from("pending_user_invites")
-    .select("id")
-    .eq("email_normalized", email)
-    .is("used_at", null)
-    .maybeSingle();
-  if (lookupErr) throw new Error(lookupErr.message);
-
-  const invitePayload = {
-    email,
-    full_name: fullName,
-    role,
-    permissions,
-    created_by: createdBy,
-    used_at: null,
-  };
-  const { error } = existingInvite?.id
-    ? await db.from("pending_user_invites").update(invitePayload).eq("id", existingInvite.id)
-    : await db.from("pending_user_invites").insert(invitePayload);
-  if (error) throw new Error(error.message);
-}
-
 export const listStaffUsers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await ensureAdmin(context);
     const supabaseAdmin = await getAdminClient();
-    const [profilesRes, rolesRes, permsRes, invitesRes] = await Promise.all([
+    const [profilesRes, rolesRes, permsRes] = await Promise.all([
       supabaseAdmin.from("profiles").select("id, email, full_name, avatar_url, is_blocked, chat_force_popup, created_at"),
       supabaseAdmin.from("user_roles").select("user_id, role"),
       supabaseAdmin.from("user_permissions").select("*"),
-      supabaseAdmin.from("pending_user_invites").select("id, email, full_name, role, permissions, created_at").is("used_at", null),
     ]);
     if (profilesRes.error) throw new Error(profilesRes.error.message);
     if (rolesRes.error) throw new Error(rolesRes.error.message);
     if (permsRes.error) throw new Error(permsRes.error.message);
-    if (invitesRes.error) throw new Error(invitesRes.error.message);
 
     const roleMap = new Map((rolesRes.data ?? []).map((r) => [r.user_id, r.role]));
     const permMap = new Map((permsRes.data ?? []).map((p) => [p.user_id, p]));
-    const profileEmails = new Set((profilesRes.data ?? []).map((p) => (p.email ?? "").toLowerCase()).filter(Boolean));
     const realUsers = (profilesRes.data ?? [])
       .filter((p) => roleMap.has(p.id))
       .map((p) => ({
@@ -178,21 +144,7 @@ export const listStaffUsers = createServerFn({ method: "GET" })
         role: roleMap.get(p.id) ?? "user_request",
         permissions: permMap.get(p.id) ?? {},
       }));
-    const pendingUsers = (invitesRes.data ?? [])
-      .filter((i) => !profileEmails.has((i.email ?? "").toLowerCase()))
-      .map((i) => ({
-        id: i.id,
-        email: i.email,
-        full_name: i.full_name,
-        avatar_url: null,
-        is_blocked: false,
-        chat_force_popup: false,
-        pending: true,
-        role: i.role,
-        permissions: i.permissions ?? {},
-        created_at: i.created_at,
-      }));
-    return [...pendingUsers, ...realUsers].sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")));
+    return realUsers.sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")));
   });
 
 export const updateStaffRole = createServerFn({ method: "POST" })
@@ -214,18 +166,7 @@ export const updateStaffRole = createServerFn({ method: "POST" })
       .maybeSingle();
     if (profileErr) throw new Error(profileErr.message);
 
-    if (!profile) {
-      const { data: invite, error: inviteErr } = await supabaseAdmin
-        .from("pending_user_invites")
-        .update({ role: data.role })
-        .eq("id", data.userId)
-        .is("used_at", null)
-        .select("id")
-        .maybeSingle();
-      if (inviteErr) throw new Error(inviteErr.message);
-      if (!invite) throw new Error("Pending user not found");
-      return { ok: true, pending: true };
-    }
+    if (!profile) throw new Error("User not found");
 
     await assertNotMainAdmin(supabaseAdmin, data.userId);
 
@@ -258,22 +199,7 @@ export const updateStaffPermissions = createServerFn({ method: "POST" })
       .maybeSingle();
     if (profileErr) throw new Error(profileErr.message);
 
-    if (!profile) {
-      const inviteUpdate = {
-        permissions: data.permissions,
-        ...(data.role ? { role: data.role } : {}),
-      };
-      const { data: invite, error: inviteErr } = await supabaseAdmin
-        .from("pending_user_invites")
-        .update(inviteUpdate)
-        .eq("id", data.userId)
-        .is("used_at", null)
-        .select("id")
-        .maybeSingle();
-      if (inviteErr) throw new Error(inviteErr.message);
-      if (!invite) throw new Error("Pending user not found");
-      return { ok: true, pending: true };
-    }
+    if (!profile) throw new Error("User not found");
 
     await assertNotMainAdmin(supabaseAdmin, data.userId);
 
@@ -394,8 +320,6 @@ async function grantStaffAccess(
     .upsert({ id: userId, email, full_name: fullName, is_blocked: false } as never, { onConflict: "id" });
   if (profileErr) throw new Error(profileErr.message);
 
-  const { error: inviteErr } = await db.from("pending_user_invites").delete().eq("email_normalized", email).is("used_at", null);
-  if (inviteErr) throw new Error(inviteErr.message);
 }
 
 export const updateStaffUser = createServerFn({ method: "POST" })
@@ -418,18 +342,7 @@ export const updateStaffUser = createServerFn({ method: "POST" })
       .eq("id", data.userId)
       .maybeSingle();
 
-    if (!current) {
-      const { data: invite, error: inviteErr } = await supabaseAdmin
-        .from("pending_user_invites")
-        .update({ full_name: data.fullName, email: data.email })
-        .eq("id", data.userId)
-        .is("used_at", null)
-        .select("id")
-        .maybeSingle();
-      if (inviteErr) throw new Error(inviteErr.message);
-      if (!invite) throw new Error("User not found");
-      return { ok: true };
-    }
+    if (!current) throw new Error("User not found");
 
     const { error } = await supabaseAdmin
       .from("profiles")
@@ -484,15 +397,7 @@ export const removeStaffUser = createServerFn({ method: "POST" })
       .eq("id", data.userId)
       .maybeSingle();
     if (lookupErr) throw new Error(lookupErr.message);
-    if (!profile) {
-      const { error: inviteErr } = await supabaseAdmin
-        .from("pending_user_invites")
-        .delete()
-        .eq("id", data.userId)
-        .is("used_at", null);
-      if (inviteErr) throw new Error(inviteErr.message);
-      return { ok: true };
-    }
+    if (!profile) throw new Error("User not found");
 
     // Strip all permissions
     const emptyPerms = Object.fromEntries(
@@ -537,15 +442,7 @@ export const deleteStaffUser = createServerFn({ method: "POST" })
       .maybeSingle();
     if (profileLookupErr) throw new Error(profileLookupErr.message);
 
-    if (!profile) {
-      const { error: inviteErr } = await supabaseAdmin
-        .from("pending_user_invites")
-        .delete()
-        .eq("id", data.userId)
-        .is("used_at", null);
-      if (inviteErr) throw new Error(inviteErr.message);
-      return { ok: true };
-    }
+    if (!profile) throw new Error("User not found");
 
     const { error: permErr } = await supabaseAdmin.from("user_permissions").delete().eq("user_id", data.userId);
     if (permErr) throw new Error(permErr.message);
@@ -553,15 +450,6 @@ export const deleteStaffUser = createServerFn({ method: "POST" })
     if (roleErr) throw new Error(roleErr.message);
     const { error: profileErr } = await supabaseAdmin.from("profiles").update({ is_blocked: true }).eq("id", data.userId);
     if (profileErr) throw new Error(profileErr.message);
-
-    if (profile?.email) {
-      const { error: inviteErr } = await supabaseAdmin
-        .from("pending_user_invites")
-        .delete()
-        .eq("email_normalized", profile.email.toLowerCase())
-        .is("used_at", null);
-      if (inviteErr) throw new Error(inviteErr.message);
-    }
 
     return { ok: true };
   });
