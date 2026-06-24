@@ -40,6 +40,7 @@ export type TeleRow = {
   order_count: number;
   complaint_count: number;
   order_id: string | null;
+  duplicate_count?: number;
 };
 
 export type TeleStaff = { id: string; name: string };
@@ -220,6 +221,19 @@ function OrderTakenBadge({ row }: { row: TeleRow }) {
   );
 }
 
+function DuplicateBadge({ row }: { row: TeleRow }) {
+  const n = row.duplicate_count ?? 1;
+  if (n <= 1) return null;
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-medium bg-red-500/15 text-red-500 border-red-500/40"
+      title={`This customer is assigned ${n} times`}
+    >
+      <MessageSquareWarning className="h-3 w-3" /> Duplicate ×{n}
+    </span>
+  );
+}
+
 function NotePopover({ row, actions }: { row: TeleRow; actions: TeleTemplateActions }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState(row.note ?? "");
@@ -264,6 +278,7 @@ function NameButton({ row, actions, className = "" }: { row: TeleRow; actions: T
       <span className="shrink-0"><MemberBadge phone={row.phone} /></span>
       <span className="shrink-0"><ComplaintBadge row={row} actions={actions} /></span>
       <span className="shrink-0"><OrderTakenBadge row={row} /></span>
+      <span className="shrink-0"><DuplicateBadge row={row} /></span>
     </div>
   );
 }
