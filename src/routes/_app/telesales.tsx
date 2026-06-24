@@ -46,6 +46,7 @@ import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { BlockCustomerDialog } from "@/components/customers/BlockCustomerDialog";
 import { ComplaintDialog } from "@/components/complaints/ComplaintDialog";
+import { ReviewDialog } from "@/components/reviews/ReviewDialog";
 import { OrderDetailDialog, type DetailOrder } from "@/components/orders/OrderDetailDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -108,6 +109,7 @@ function TelesalesPage() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [complaintFor, setComplaintFor] = useState<{ phone: string; name: string | null } | null>(null);
+  const [reviewFor, setReviewFor] = useState<{ phone: string; name: string | null } | null>(null);
 
   const { desktopTemplate, mobileTemplate } = useTeleTemplate();
   const isMobile = useIsMobile();
