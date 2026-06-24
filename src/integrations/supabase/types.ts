@@ -3376,6 +3376,7 @@ export type Database = {
           role: Database["public"]["Enums"]["app_role"]
         }[]
       }
+      next_unique_order_number: { Args: never; Returns: number }
       normalize_phone: { Args: { p_phone: string }; Returns: string }
       postgres_fdw_disconnect: { Args: { "": string }; Returns: boolean }
       postgres_fdw_disconnect_all: { Args: never; Returns: boolean }
