@@ -1,5 +1,6 @@
 import { createFileRoute, Outlet, useNavigate, Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -27,6 +28,7 @@ export const Route = createFileRoute("/_app")({
 function AppLayout() {
   const { loading, profileLoading, session, role, permissions } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const lastDenied = useRef<string | null>(null);
   const [restockOpen, setRestockOpen] = useState(false);
@@ -74,6 +76,28 @@ function AppLayout() {
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [session]);
+
+  // Keep the orders cache aware of changes while the user is on other pages.
+  // Returning to Orders then shows cached rows immediately and syncs in-place.
+  useEffect(() => {
+    if (!session || path === "/orders" || path === "/orders/") return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const markOrdersChanged = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["orders"], refetchType: "none" });
+        window.dispatchEvent(new CustomEvent("orders:changed"));
+      }, 4000);
+    };
+    const channel = supabase
+      .channel("orders-cache-sync-away")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, markOrdersChanged)
+      .subscribe();
+    return () => {
+      if (timer) window.clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
+  }, [session, path, queryClient]);
 
   if (loading) return <div className="min-h-screen grid place-items-center text-muted-foreground">Loading…</div>;
   if (!session) return null;
