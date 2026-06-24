@@ -228,7 +228,8 @@ export const getTelesalesCounts = createServerFn({ method: "POST" })
     const base = () => {
       let q = supabase
         .from("telesales_assignments")
-        .select("status, last_action, order_id" as never);
+        .select("status, last_action, order_id" as never)
+        .range(0, 49999);
       if (data.assignedTo === null) q = q.is("assigned_to", null);
       else if (data.assignedTo) q = q.eq("assigned_to", data.assignedTo);
       else if (!isAdmin) q = q.eq("assigned_to", userId);
