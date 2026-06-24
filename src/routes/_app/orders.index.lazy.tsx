@@ -1513,7 +1513,9 @@ function OrdersPage() {
             <div className={`${tabsOpen ? "grid" : "hidden"} sm:grid grid-cols-[repeat(auto-fit,minmax(78px,1fr))] gap-1.5`}>
               {PRIMARY_TABS.map((tab) => {
                 const c = TAB_COLOR_CLASSES[tab.color];
-                const active = effectiveStatusFilter === tab.key;
+                const active = tab.key === "partner"
+                  ? effectiveStatusFilter.startsWith("partner")
+                  : effectiveStatusFilter === tab.key;
                 const isPreorderAlert = tab.key === "preorder" && preorderDueCount > 0;
                 const baseTile = "flex flex-col items-center justify-center rounded-md border-2 px-1.5 py-1 w-full min-w-0 transition-colors cursor-pointer select-none";
                 const cls = isPreorderAlert
