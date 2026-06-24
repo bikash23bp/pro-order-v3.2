@@ -2,7 +2,7 @@ import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
 import {
   Phone, MessageCircle, PhoneOff, PhoneMissed, Clock3, ShieldAlert,
-  PhoneCall, UserCog, Plus, StickyNote, Save, Loader2, MessageSquareWarning, ShoppingBag,
+  PhoneCall, UserCog, Plus, StickyNote, Save, Loader2, MessageSquareWarning, ShoppingBag, Star,
 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,7 @@ export type TeleTemplateActions = {
   onOpenDetail: (id: string) => void;
   onSaveNote: (id: string, note: string) => Promise<void>;
   onOpenComplaints: (phone: string, name: string | null) => void;
+  onOpenReviews: (phone: string, name: string | null) => void;
 };
 
 export type TeleTemplateProps = {
