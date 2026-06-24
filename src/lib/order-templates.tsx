@@ -207,6 +207,7 @@ function CustomerBadges({ order, flags, actions }: OrderTemplateProps) {
         {order.customer_name}
       </button>
       <MemberBadge phone={order.customer_phone} />
+      <OrderReviewBadge orderId={order.id} />
       {flags.isVip && (
         <Badge variant="outline" className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-[10px] px-1 py-0">
           <Crown className="h-3 w-3" /> VIP
