@@ -837,6 +837,9 @@ function OrdersPage() {
     if (tab === "web_pending" || tab === "pending_web") return (r.status as string) === "pending_web";
     if (tab === "facebook") return r.source === "facebook";
     if (tab === "partner") return r.source === "oms";
+    if (tab === "partner_pending") return r.source === "oms" && r.status === "pending";
+    if (tab === "partner_ready_to_ship") return r.source === "oms" && r.status === "ready_to_ship";
+    if (tab === "partner_cancelled") return r.source === "oms" && r.status === "cancelled";
     if (tab === "preorder") return !!r.preorder;
     if (tab === "sent_to_partner") return !!(r as { forwarded_to_partner_at?: string | null }).forwarded_to_partner_at;
     return r.status === tab;
