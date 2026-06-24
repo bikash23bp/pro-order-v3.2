@@ -842,6 +842,9 @@ function OrdersPage() {
     if (tab === "partner_cancelled") return r.source === "oms" && r.status === "cancelled";
     if (tab === "preorder") return !!r.preorder;
     if (tab === "sent_to_partner") return !!(r as { forwarded_to_partner_at?: string | null }).forwarded_to_partner_at;
+    if (tab === "sent_to_partner_pending") return !!(r as { forwarded_to_partner_at?: string | null }).forwarded_to_partner_at && r.status === "pending";
+    if (tab === "sent_to_partner_ready_to_ship") return !!(r as { forwarded_to_partner_at?: string | null }).forwarded_to_partner_at && r.status === "ready_to_ship";
+    if (tab === "sent_to_partner_cancelled") return !!(r as { forwarded_to_partner_at?: string | null }).forwarded_to_partner_at && r.status === "cancelled";
     return r.status === tab;
   };
 
