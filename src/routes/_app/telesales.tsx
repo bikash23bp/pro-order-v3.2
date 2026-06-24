@@ -915,6 +915,7 @@ function DetailDialog({
   const [note, setNote] = useState("");
   const [blockOpen, setBlockOpen] = useState(false);
   const [complaintOpen, setComplaintOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [viewOrder, setViewOrder] = useState<DetailOrder | null>(null);
   const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
 
