@@ -1548,7 +1548,9 @@ function OrdersPage() {
             <div className={`${tabsOpen ? "grid" : "hidden"} sm:grid grid-cols-[repeat(auto-fit,minmax(84px,1fr))] gap-1.5 pt-1`}>
               {PIPELINE_TABS.map((tab) => {
                 const c = TAB_COLOR_CLASSES[tab.color];
-                const active = effectiveStatusFilter === tab.key;
+                const active = tab.key === "sent_to_partner"
+                  ? effectiveStatusFilter === "sent_to_partner" || effectiveStatusFilter.startsWith("sent_to_partner_")
+                  : effectiveStatusFilter === tab.key;
                 return (
                   <button
                     key={tab.key}
@@ -1590,6 +1592,34 @@ function OrdersPage() {
                     active
                       ? "bg-[#00B795] text-white border-[#00B795]"
                       : "border-fuchsia-500/60 text-fuchsia-800 dark:text-fuchsia-200 hover:bg-fuchsia-500/20"
+                  }`}
+                >
+                  {sf.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {(effectiveStatusFilter === "sent_to_partner" || effectiveStatusFilter.startsWith("sent_to_partner_")) && (
+          <div className="flex flex-wrap items-center gap-1.5 px-3 sm:px-4 py-2 border-y bg-teal-500/10">
+            <span className="text-[11px] font-semibold text-teal-700 dark:text-teal-300 mr-1">Sent to Partner সাব-ফিল্টার:</span>
+            {[
+              { key: "sent_to_partner", label: "All" },
+              { key: "sent_to_partner_pending", label: "Pending" },
+              { key: "sent_to_partner_ready_to_ship", label: "Ready to Ship" },
+              { key: "sent_to_partner_cancelled", label: "Cancelled" },
+            ].map((sf) => {
+              const active = effectiveStatusFilter === sf.key;
+              return (
+                <button
+                  key={sf.key}
+                  type="button"
+                  onClick={() => selectOrderTab(sf.key)}
+                  onMouseEnter={() => prefetchOrderTab(sf.key)}
+                  className={`px-3 py-1 rounded-md border-2 text-[11px] font-semibold transition-colors ${
+                    active
+                      ? "bg-[#00B795] text-white border-[#00B795]"
+                      : "border-teal-500/60 text-teal-800 dark:text-teal-200 hover:bg-teal-500/20"
                   }`}
                 >
                   {sf.label}
