@@ -1566,6 +1566,34 @@ function OrdersPage() {
             </div>
             </div>
           </div>
+          {effectiveStatusFilter.startsWith("partner") && (
+            <div className="flex flex-wrap items-center gap-1.5 px-3 sm:px-4 pb-2">
+              <span className="text-[11px] font-medium text-muted-foreground mr-1">Partner sub-filter:</span>
+              {[
+                { key: "partner", label: "All" },
+                { key: "partner_pending", label: "Pending" },
+                { key: "partner_ready_to_ship", label: "Ready to Ship" },
+                { key: "partner_cancelled", label: "Cancelled" },
+              ].map((sf) => {
+                const active = effectiveStatusFilter === sf.key;
+                return (
+                  <button
+                    key={sf.key}
+                    type="button"
+                    onClick={() => selectOrderTab(sf.key)}
+                    onMouseEnter={() => prefetchOrderTab(sf.key)}
+                    className={`px-2.5 py-1 rounded-md border text-[11px] font-medium transition-colors ${
+                      active
+                        ? "bg-[#00B795] text-white border-[#00B795]"
+                        : "border-fuchsia-500/50 hover:bg-fuchsia-500/15"
+                    }`}
+                  >
+                    {sf.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </CardHeader>
         {selected.size > 0 && (
           <div className="sticky top-0 z-30 flex flex-wrap items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 border-y bg-green-600 text-white shadow-sm animate-in slide-in-from-top-2 [&_button]:h-7 [&_button]:px-2 [&_button]:text-[11px] sm:[&_button]:h-8 sm:[&_button]:px-3 sm:[&_button]:text-xs">
