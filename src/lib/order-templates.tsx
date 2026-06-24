@@ -231,17 +231,20 @@ function ItemsList({ order, dense = false }: { order: OrderForTemplate; dense?: 
   const items = order.order_items ?? [];
   if (items.length === 0) return null;
   const size = dense ? "h-8 w-8" : "h-10 w-10";
+  const pxBase = dense ? 32 : 40; // matches Tailwind h/w
+  const pxDpr = pxBase * 2;       // serve 2x for retina
   return (
     <div className={`space-y-1.5 ${dense ? "" : "pt-2 mt-1 border-t border-dashed border-border/60"}`}>
       {items.map((it, i) => {
         const img = it.product_variants?.image_url ?? it.products?.image_url ?? null;
+        const thumb = img ? transformImg(img, pxDpr, 65) : null;
         const attrs = it.product_variants?.attributes;
         const variantLabel = attrs && typeof attrs === "object"
           ? Object.values(attrs).filter(Boolean).join(", ")
           : "";
         return (
           <div key={i} className="flex items-center gap-2">
-            {img ? (
+            {img && thumb ? (
               <a
                 href={img}
                 target="_blank"
@@ -251,9 +254,13 @@ function ItemsList({ order, dense = false }: { order: OrderForTemplate; dense?: 
                 className="shrink-0"
               >
                 <img
-                  src={img}
+                  src={thumb}
                   alt={it.products?.name ?? ""}
                   loading="lazy"
+                  decoding="async"
+                  width={pxBase}
+                  height={pxBase}
+                  sizes={`${pxBase}px`}
                   className={`${size} rounded-md border border-border/60 object-cover bg-muted cursor-zoom-in hover:opacity-90 transition`}
                 />
               </a>
