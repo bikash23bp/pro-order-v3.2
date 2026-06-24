@@ -587,7 +587,9 @@ function OrdersPage() {
     staleTime: ORDER_LIST_STALE_MS,
     gcTime: ORDER_LIST_GC_MS,
     refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    // Fresh cache paints instantly when returning to the page. If another page
+    // marked the orders cache changed, React Query refetches in the background.
+    refetchOnMount: true,
     placeholderData: keepPreviousData,
     retry: transientOrderLoadRetry,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
@@ -762,7 +764,7 @@ function OrdersPage() {
     staleTime: ORDER_LIST_STALE_MS,
     gcTime: ORDER_LIST_GC_MS,
     refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchOnMount: true,
     placeholderData: keepPreviousData,
     retry: false,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
@@ -783,14 +785,14 @@ function OrdersPage() {
   const preorderDueCount = countsQuery.data?.preorderDueCount ?? 0;
 
   // Unified refetcher used by mutations + manual refresh buttons.
-  const refetchAll = useCallback(async (showToast = false) => {
+  const refetchAll = useCallback(async (showToast = false, clearSelection = true) => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["orders", "list"] }),
       queryClient.invalidateQueries({ queryKey: ["orders", "counts"] }),
     ]);
     // Selection may reference rows that were deleted/edited by another user; clear it
     // so subsequent bulk actions operate only on visible rows.
-    setSelected(new Set());
+    if (clearSelection) setSelected(new Set());
     // Notify topbar widgets (e.g. Duplicates badge) to refresh immediately.
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("orders:changed"));
@@ -822,7 +824,7 @@ function OrdersPage() {
           );
         }
         if (timer) clearTimeout(timer);
-        timer = setTimeout(() => { void refetchAll(); }, 4000);
+        timer = setTimeout(() => { void refetchAll(false, false); }, 4000);
       })
       .subscribe();
     return () => {
