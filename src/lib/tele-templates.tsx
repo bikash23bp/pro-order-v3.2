@@ -278,6 +278,7 @@ function NameButton({ row, actions, className = "" }: { row: TeleRow; actions: T
       <span className="shrink-0"><MemberBadge phone={row.phone} /></span>
       <span className="shrink-0"><ComplaintBadge row={row} actions={actions} /></span>
       <span className="shrink-0"><OrderTakenBadge row={row} /></span>
+      <span className="shrink-0"><DuplicateBadge row={row} /></span>
     </div>
   );
 }
