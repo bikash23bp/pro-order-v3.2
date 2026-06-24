@@ -11,14 +11,16 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { MemberBadge } from "@/components/MemberBadge";
 import { DuplicateBadge } from "@/components/orders/DuplicateBadge";
+import { ReviewDialog } from "@/components/reviews/ReviewDialog";
 
 // In-memory cache so the same order doesn't re-fetch on every re-render / page swap.
 const reviewCache = new Map<string, { count: number; avg: number }>();
 
-function OrderReviewBadge({ orderId }: { orderId: string }) {
+function OrderReviewBadge({ orderId, phone, customerName }: { orderId: string; phone: string; customerName: string }) {
   const [s, setS] = useState<{ count: number; avg: number } | null>(
     () => reviewCache.get(orderId) ?? null,
   );
+  const [open, setOpen] = useState(false);
   useEffect(() => {
     if (reviewCache.has(orderId)) { setS(reviewCache.get(orderId)!); return; }
     let alive = true;
@@ -38,13 +40,26 @@ function OrderReviewBadge({ orderId }: { orderId: string }) {
   }, [orderId]);
   if (!s || s.count === 0) return null;
   return (
-    <span
-      className="inline-flex items-center gap-0.5 rounded border border-amber-500/40 bg-amber-500/15 text-amber-500 px-1 py-0 text-[10px] font-medium"
-      title={`${s.count} review${s.count > 1 ? "s" : ""}`}
-    >
-      <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-      {s.avg.toFixed(1)}
-    </span>
+    <>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+        className="inline-flex items-center gap-0.5 rounded border border-amber-500/40 bg-amber-500/15 text-amber-500 px-1 py-0 text-[10px] font-medium hover:bg-amber-500/25"
+        title={`${s.count} review${s.count > 1 ? "s" : ""} — ক্লিক করে লগ দেখুন`}
+      >
+        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+        {s.avg.toFixed(1)} ({s.count})
+      </button>
+      {open && (
+        <ReviewDialog
+          open={open}
+          onOpenChange={setOpen}
+          phone={phone}
+          customerName={customerName}
+          orderId={orderId}
+        />
+      )}
+    </>
   );
 }
 import {
@@ -246,7 +261,7 @@ function CustomerBadges({ order, flags, actions }: OrderTemplateProps) {
         {order.customer_name}
       </button>
       <MemberBadge phone={order.customer_phone} />
-      <OrderReviewBadge orderId={order.id} />
+      <OrderReviewBadge orderId={order.id} phone={order.customer_phone} customerName={order.customer_name} />
       {flags.isVip && (
         <Badge variant="outline" className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-[10px] px-1 py-0">
           <Crown className="h-3 w-3" /> VIP
