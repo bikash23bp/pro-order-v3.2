@@ -712,11 +712,12 @@ function MobilePhoto(p: OrderTemplateProps) {
   const { order, flags, actions } = p;
   const firstItem = (order.order_items ?? [])[0];
   const heroImg = firstItem?.product_variants?.image_url ?? firstItem?.products?.image_url ?? null;
+  const heroThumb = heroImg ? transformImg(heroImg, 800, 70) : null;
   return (
     <div className={`rounded-xl border bg-card overflow-hidden ${
       flags.isSelected ? "border-primary/50 ring-1 ring-primary/30" : "border-border/60"
     }`}>
-      {heroImg ? (
+      {heroImg && heroThumb ? (
         <div className="relative h-32 bg-muted">
           <a
             href={heroImg}
@@ -726,7 +727,14 @@ function MobilePhoto(p: OrderTemplateProps) {
             title="ছবি পুরো সাইজে দেখুন"
             className="absolute inset-0 block"
           >
-            <img src={heroImg} alt="" loading="lazy" className="w-full h-full object-cover cursor-zoom-in" />
+            <img
+              src={heroThumb}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              sizes="(max-width: 640px) 100vw, 400px"
+              className="w-full h-full object-cover cursor-zoom-in"
+            />
           </a>
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
           <div className="absolute top-2 left-2"><Checkbox checked={flags.isSelected} onCheckedChange={() => actions.toggleOne(order.id)} /></div>
