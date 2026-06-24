@@ -21,6 +21,46 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MemberBadge } from "@/components/MemberBadge";
+import { supabase } from "@/integrations/supabase/client";
+
+// Cache so repeated renders/page switches don't refetch the same phone.
+const teleReviewCache = new Map<string, { count: number; avg: number }>();
+
+function TeleReviewBadge({ row, actions }: { row: TeleRow; actions: TeleTemplateActions }) {
+  const phone = row.phone;
+  const [s, setS] = useState<{ count: number; avg: number } | null>(
+    () => teleReviewCache.get(phone) ?? null,
+  );
+  useEffect(() => {
+    if (teleReviewCache.has(phone)) { setS(teleReviewCache.get(phone)!); return; }
+    let alive = true;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from("customer_reviews")
+        .select("rating")
+        .eq("phone", phone);
+      const arr = (data ?? []) as Array<{ rating: number }>;
+      const count = arr.length;
+      const avg = count ? arr.reduce((x, r) => x + Number(r.rating), 0) / count : 0;
+      const v = { count, avg };
+      teleReviewCache.set(phone, v);
+      if (alive) setS(v);
+    })().catch(() => {});
+    return () => { alive = false; };
+  }, [phone]);
+  if (!s || s.count === 0) return null;
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); actions.onOpenReviews(row.phone, row.name, row.order_id); }}
+      className="inline-flex items-center gap-0.5 rounded border border-amber-500/40 bg-amber-500/15 text-amber-500 px-1 py-0 text-[10px] font-medium hover:bg-amber-500/25"
+      title={`${s.count} review${s.count > 1 ? "s" : ""} — ক্লিক করে লগ দেখুন`}
+    >
+      <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+      {s.avg.toFixed(1)} ({s.count})
+    </button>
+  );
+}
 
 // ----- Types -----
 
@@ -293,6 +333,7 @@ function NameButton({ row, actions, className = "" }: { row: TeleRow; actions: T
       </button>
       <span className="shrink-0"><MemberBadge phone={row.phone} /></span>
       <span className="shrink-0"><ComplaintBadge row={row} actions={actions} /></span>
+      <span className="shrink-0"><TeleReviewBadge row={row} actions={actions} /></span>
       <span className="shrink-0"><OrderTakenBadge row={row} /></span>
       <span className="shrink-0"><DuplicateBadge row={row} /></span>
     </div>
