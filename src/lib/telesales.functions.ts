@@ -143,16 +143,22 @@ export const listTelesalesAssignments = createServerFn({ method: "POST" })
     const customerIds = [...new Set(list.map((r) => r.customer_id))];
     const userIds = [...new Set(list.map((r) => r.assigned_to).filter(Boolean) as string[])];
 
-    const [{ data: customers }, profiles] = await Promise.all([
+    const [{ data: customers }, profiles, dupRowsRes] = await Promise.all([
       supabase.from("imported_customers")
         .select("id, name, phone, address").in("id", customerIds),
       userIds.length
         ? supabase.from("profiles").select("id, full_name, email").in("id", userIds)
         : Promise.resolve({ data: [] as { id: string; full_name: string | null; email: string | null }[] }),
+      supabase.from("telesales_assignments")
+        .select("customer_id").in("customer_id", customerIds),
     ]);
 
     const cMap = new Map((customers ?? []).map((c) => [c.id, c]));
     const pMap = new Map((profiles.data ?? []).map((p) => [p.id, p.full_name || p.email || "User"]));
+    const dupMap = new Map<string, number>();
+    for (const r of (dupRowsRes.data ?? []) as Array<{ customer_id: string }>) {
+      dupMap.set(r.customer_id, (dupMap.get(r.customer_id) ?? 0) + 1);
+    }
 
     const phones = (customers ?? []).map((c) => normalizePhone(c.phone)).filter(Boolean) as string[];
     const rawPhones = (customers ?? []).map((c) => c.phone).filter(Boolean) as string[];
