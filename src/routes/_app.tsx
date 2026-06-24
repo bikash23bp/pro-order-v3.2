@@ -81,7 +81,7 @@ function AppLayout() {
   // Returning to Orders then shows cached rows immediately and syncs in-place.
   useEffect(() => {
     if (!session || path === "/orders" || path === "/orders/") return;
-    let timer: ReturnType<typeof setTimeout> | null = null;
+    let timer: number | null = null;
     const markOrdersChanged = () => {
       if (timer) window.clearTimeout(timer);
       timer = window.setTimeout(() => {
