@@ -50,7 +50,7 @@ import { ReviewDialog } from "@/components/reviews/ReviewDialog";
 import { OrderDetailDialog, type DetailOrder } from "@/components/orders/OrderDetailDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { MessageSquareWarning } from "lucide-react";
+import { MessageSquareWarning, Star } from "lucide-react";
 
 export const Route = createFileRoute("/_app/telesales")({
   head: () => ({ meta: [{ title: "TeleSales — OMS" }] }),
