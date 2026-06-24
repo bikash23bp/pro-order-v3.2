@@ -221,6 +221,19 @@ function OrderTakenBadge({ row }: { row: TeleRow }) {
   );
 }
 
+function DuplicateBadge({ row }: { row: TeleRow }) {
+  const n = row.duplicate_count ?? 1;
+  if (n <= 1) return null;
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-medium bg-red-500/15 text-red-500 border-red-500/40"
+      title={`This customer is assigned ${n} times`}
+    >
+      <MessageSquareWarning className="h-3 w-3" /> Duplicate ×{n}
+    </span>
+  );
+}
+
 function NotePopover({ row, actions }: { row: TeleRow; actions: TeleTemplateActions }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState(row.note ?? "");
