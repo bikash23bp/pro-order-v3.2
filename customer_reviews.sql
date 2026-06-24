@@ -51,3 +51,6 @@ DROP TRIGGER IF EXISTS trg_customer_reviews_updated_at ON public.customer_review
 CREATE TRIGGER trg_customer_reviews_updated_at
   BEFORE UPDATE ON public.customer_reviews
   FOR EACH ROW EXECUTE FUNCTION public.update_customer_reviews_updated_at();
+
+-- Refresh the Data API schema cache immediately after creating the table.
+NOTIFY pgrst, 'reload schema';

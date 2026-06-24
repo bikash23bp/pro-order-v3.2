@@ -17,6 +17,17 @@ export type ReviewRow = {
 
 const phoneSchema = z.string().trim().min(1).max(64);
 
+const REVIEW_TABLE_SETUP_MESSAGE = "রিভিউ টেবিল এখনো তৈরি হয়নি। customer_reviews.sql অডিট প্রজেক্টে চালান, তারপর আবার চেষ্টা করুন।";
+
+function isMissingReviewTableError(error: unknown): boolean {
+  const e = error as { code?: string; message?: string } | null | undefined;
+  const message = (e?.message ?? "").toLowerCase();
+  return e?.code === "PGRST205"
+    || (message.includes("customer_reviews") && message.includes("schema cache"))
+    || message.includes('relation "public.customer_reviews" does not exist')
+    || message.includes('relation "customer_reviews" does not exist');
+}
+
 async function nameMap(supabase: any, ids: string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   const uniq = Array.from(new Set(ids.filter(Boolean))) as string[];
@@ -60,7 +71,10 @@ export const listReviewsByPhone = createServerFn({ method: "POST" })
       .select("*")
       .eq("phone", data.phone.trim())
       .order("created_at", { ascending: false });
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (isMissingReviewTableError(error)) return [];
+      throw new Error(error.message);
+    }
     const list = (rows ?? []) as any[];
     const [names, orderNums] = await Promise.all([
       nameMap(supabase, list.map((r) => r.created_by)),
@@ -78,7 +92,10 @@ export const reviewSummaryByPhone = createServerFn({ method: "POST" })
       .from("customer_reviews")
       .select("rating")
       .eq("phone", data.phone.trim());
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (isMissingReviewTableError(error)) return { count: 0, avg: 0 };
+      throw new Error(error.message);
+    }
     const arr = (rows ?? []) as Array<{ rating: number }>;
     const count = arr.length;
     const avg = count ? arr.reduce((s, r) => s + Number(r.rating), 0) / count : 0;
@@ -97,7 +114,10 @@ export const reviewSummaryByOrderIds = createServerFn({ method: "POST" })
       .from("customer_reviews")
       .select("order_id, rating")
       .in("order_id", data.orderIds);
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (isMissingReviewTableError(error)) return {} as Record<string, { count: number; avg: number }>;
+      throw new Error(error.message);
+    }
     const map = new Map<string, { sum: number; count: number }>();
     for (const r of (rows ?? []) as Array<{ order_id: string; rating: number }>) {
       if (!r.order_id) continue;
@@ -136,7 +156,10 @@ export const createReview = createServerFn({ method: "POST" })
       })
       .select("id")
       .single();
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (isMissingReviewTableError(error)) throw new Error(REVIEW_TABLE_SETUP_MESSAGE);
+      throw new Error(error.message);
+    }
     return { id: (row as any).id };
   });
 
@@ -146,6 +169,9 @@ export const deleteReview = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = context as any;
     const { error } = await (supabase as any).from("customer_reviews").delete().eq("id", data.id);
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (isMissingReviewTableError(error)) throw new Error(REVIEW_TABLE_SETUP_MESSAGE);
+      throw new Error(error.message);
+    }
     return { ok: true };
   });

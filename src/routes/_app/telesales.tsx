@@ -109,7 +109,7 @@ function TelesalesPage() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [complaintFor, setComplaintFor] = useState<{ phone: string; name: string | null } | null>(null);
-  const [reviewFor, setReviewFor] = useState<{ phone: string; name: string | null } | null>(null);
+  const [reviewFor, setReviewFor] = useState<{ phone: string; name: string | null; orderId?: string | null } | null>(null);
 
   const { desktopTemplate, mobileTemplate } = useTeleTemplate();
   const isMobile = useIsMobile();
@@ -397,7 +397,7 @@ function TelesalesPage() {
                     onAction: (id, action) => onAction(id, action),
                     onOpenDetail: (id) => setDetailId(id),
                     onOpenComplaints: (phone, name) => setComplaintFor({ phone, name }),
-                    onOpenReviews: (phone, name) => setReviewFor({ phone, name }),
+                    onOpenReviews: (phone, name, orderId) => setReviewFor({ phone, name, orderId }),
                     onSaveNote: async (id, note) => {
                       await updateFn({ data: { id, note } });
                       setRows((prev) => prev.map((x) => x.id === id ? { ...x, note } : x));
@@ -495,6 +495,7 @@ function TelesalesPage() {
           onOpenChange={(v) => { if (!v) setReviewFor(null); }}
           phone={reviewFor.phone}
           customerName={reviewFor.name}
+          orderId={reviewFor.orderId ?? null}
         />
       )}
     </div>
