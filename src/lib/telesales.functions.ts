@@ -93,9 +93,8 @@ export type TeleAssignment = {
   order_count: number;
   complaint_count: number;
   order_id: string | null;
+  duplicate_count: number;
 };
-
-export type TeleAssignmentWithDup = TeleAssignment & { duplicate_count: number };
 
 export const listTelesalesAssignments = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
