@@ -395,6 +395,7 @@ function TelesalesPage() {
                     onAction: (id, action) => onAction(id, action),
                     onOpenDetail: (id) => setDetailId(id),
                     onOpenComplaints: (phone, name) => setComplaintFor({ phone, name }),
+                    onOpenReviews: (phone, name) => setReviewFor({ phone, name }),
                     onSaveNote: async (id, note) => {
                       await updateFn({ data: { id, note } });
                       setRows((prev) => prev.map((x) => x.id === id ? { ...x, note } : x));
