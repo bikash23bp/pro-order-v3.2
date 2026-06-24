@@ -75,9 +75,7 @@ export function AddUserDialog({ onCreated }: { onCreated: () => void }) {
           toast.warning(`User created but avatar upload failed: ${e instanceof Error ? e.message : "unknown error"}`);
         }
       }
-      if (created?.pending) {
-        toast.success("User access saved. Ask them to sign up with this email.");
-      } else if (created?.tempPassword) {
+      if (created?.tempPassword) {
         toast.success(`User created. Temporary password: ${created.tempPassword}`, { duration: 20000 });
       } else {
         toast.success("User created. They can sign in now.");
