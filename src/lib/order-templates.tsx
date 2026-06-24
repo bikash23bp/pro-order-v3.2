@@ -217,12 +217,21 @@ function ItemsList({ order, dense = false }: { order: OrderForTemplate; dense?: 
         return (
           <div key={i} className="flex items-center gap-2">
             {img ? (
-              <img
-                src={img}
-                alt={it.products?.name ?? ""}
-                loading="lazy"
-                className={`${size} rounded-md border border-border/60 object-cover bg-muted shrink-0`}
-              />
+              <a
+                href={img}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                title="ছবি পুরো সাইজে দেখুন"
+                className="shrink-0"
+              >
+                <img
+                  src={img}
+                  alt={it.products?.name ?? ""}
+                  loading="lazy"
+                  className={`${size} rounded-md border border-border/60 object-cover bg-muted cursor-zoom-in hover:opacity-90 transition`}
+                />
+              </a>
             ) : (
               <div className={`${size} rounded-md border border-border/60 bg-muted flex items-center justify-center shrink-0`}>
                 <Package className="h-4 w-4 text-muted-foreground/60" />
