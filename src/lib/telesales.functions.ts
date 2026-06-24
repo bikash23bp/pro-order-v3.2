@@ -201,6 +201,7 @@ export const listTelesalesAssignments = createServerFn({ method: "POST" })
         order_count: norm ? countMap.get(norm) ?? 0 : 0,
         complaint_count: norm ? complaintMap.get(norm) ?? 0 : 0,
         order_id: r.order_id ?? null,
+        duplicate_count: dupMap.get(r.customer_id) ?? 1,
       };
     });
 
