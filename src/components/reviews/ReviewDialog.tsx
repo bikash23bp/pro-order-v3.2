@@ -57,11 +57,27 @@ export function ReviewDialog({
   const [rating, setRating] = useState(5);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [setupMissing, setSetupMissing] = useState(false);
+
+  const isSetupMessage = (message: string) =>
+    message.includes("রিভিউ টেবিল")
+    || (message.includes("customer_reviews") && message.toLowerCase().includes("schema cache"));
 
   const load = async () => {
     if (!phone.trim()) return;
     setLoading(true);
-    try { setRows(await fetchList({ data: { phone: phone.trim() } })); }
+    try {
+      setRows(await fetchList({ data: { phone: phone.trim() } }));
+      setSetupMissing(false);
+    } catch (e: any) {
+      const message = e?.message ?? "রিভিউ লোড করা যায়নি";
+      if (isSetupMessage(message)) {
+        setRows([]);
+        setSetupMissing(true);
+      } else {
+        toast.error(message);
+      }
+    }
     finally { setLoading(false); }
   };
 
@@ -79,7 +95,11 @@ export function ReviewDialog({
       toast.success("রিভিউ সংরক্ষণ হয়েছে");
       setNote(""); setRating(5); setShowForm(false);
       await load();
-    } catch (e: any) { toast.error(e.message ?? "ব্যর্থ"); }
+    } catch (e: any) {
+      const message = e.message ?? "ব্যর্থ";
+      if (isSetupMessage(message)) setSetupMissing(true);
+      toast.error(message);
+    }
     finally { setSaving(false); }
   };
 
@@ -111,6 +131,12 @@ export function ReviewDialog({
               </Button>
             )}
           </div>
+
+          {setupMissing && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
+              রিভিউ টেবিল এখনো অডিট প্রজেক্টে নেই। customer_reviews.sql চালালে এখান থেকেই রিভিউ সেভ হবে।
+            </div>
+          )}
 
           {showForm && (
             <div className="rounded-md border p-3 space-y-3 bg-muted/30">

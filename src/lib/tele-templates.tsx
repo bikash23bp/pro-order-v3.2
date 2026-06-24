@@ -52,7 +52,7 @@ export type TeleTemplateActions = {
   onOpenDetail: (id: string) => void;
   onSaveNote: (id: string, note: string) => Promise<void>;
   onOpenComplaints: (phone: string, name: string | null) => void;
-  onOpenReviews: (phone: string, name: string | null) => void;
+  onOpenReviews: (phone: string, name: string | null, orderId?: string | null) => void;
 };
 
 export type TeleTemplateProps = {
@@ -213,16 +213,17 @@ function ComplaintBadge({ row, actions }: { row: TeleRow; actions: TeleTemplateA
   );
 }
 
-function ReviewButton({ row, actions }: { row: TeleRow; actions: TeleTemplateActions }) {
+function ReviewButton({ row, actions, compact = false }: { row: TeleRow; actions: TeleTemplateActions; compact?: boolean }) {
   return (
     <Button
       size="sm"
       variant="outline"
-      className="h-6 px-1.5 gap-1 text-[10px]"
+      className={`${compact ? "h-7 px-2" : "h-7 px-2.5"} gap-1 text-[10px]`}
       title="রিভিউ যোগ / দেখুন"
-      onClick={(e) => { e.stopPropagation(); actions.onOpenReviews(row.phone, row.name); }}
+      onClick={(e) => { e.stopPropagation(); actions.onOpenReviews(row.phone, row.name, row.order_id); }}
     >
       <Star className="h-3 w-3 text-amber-400 fill-amber-400" />
+      Review
     </Button>
   );
 }
@@ -294,7 +295,6 @@ function NameButton({ row, actions, className = "" }: { row: TeleRow; actions: T
       <span className="shrink-0"><ComplaintBadge row={row} actions={actions} /></span>
       <span className="shrink-0"><OrderTakenBadge row={row} /></span>
       <span className="shrink-0"><DuplicateBadge row={row} /></span>
-      <span className="shrink-0"><ReviewButton row={row} actions={actions} /></span>
     </div>
   );
 }
@@ -316,7 +316,7 @@ function LastActionBadge({ row }: { row: TeleRow }) {
 function DesktopTableClassic(p: TeleTemplateProps) {
   const { row, isSelected, staff, actions } = p;
   return (
-    <div className={`grid grid-cols-[auto_1fr_180px_1fr_60px_140px_200px_auto] items-center gap-3 px-3 py-2 border-b bg-card text-sm ${
+    <div className={`grid grid-cols-[auto_1fr_180px_1fr_60px_140px_260px_auto] items-center gap-3 px-3 py-2 border-b bg-card text-sm ${
       isSelected ? "bg-primary/5" : ""
     }`}>
       <Checkbox checked={isSelected} onCheckedChange={() => actions.toggleOne(row.id)} />
@@ -332,6 +332,7 @@ function DesktopTableClassic(p: TeleTemplateProps) {
       <div className="inline-flex items-center gap-0.5 justify-end">
         <ActionIcons row={row} actions={actions} dense />
         <ReassignMenu row={row} staff={staff} actions={actions} dense />
+        <ReviewButton row={row} actions={actions} compact />
         <NewOrderBtn row={row} />
       </div>
     </div>
@@ -359,6 +360,7 @@ function DesktopRowCompact(p: TeleTemplateProps) {
       <ContactButtons phone={row.phone} />
       <ActionIcons row={row} actions={actions} dense />
       <ReassignMenu row={row} staff={staff} actions={actions} dense />
+      <ReviewButton row={row} actions={actions} compact />
       <NewOrderBtn row={row} />
     </div>
   );
@@ -392,6 +394,7 @@ function DesktopCardPremium(p: TeleTemplateProps) {
           <ActionIcons row={row} actions={actions} />
           <div className="flex items-center gap-1">
             <ReassignMenu row={row} staff={staff} actions={actions} />
+            <ReviewButton row={row} actions={actions} />
             <NewOrderBtn row={row} />
           </div>
         </div>
@@ -425,6 +428,7 @@ function DesktopSplitPanel(p: TeleTemplateProps) {
           <LastActionBadge row={row} />
           <div className="flex items-center gap-1">
             <ReassignMenu row={row} staff={staff} actions={actions} />
+            <ReviewButton row={row} actions={actions} />
             <NewOrderBtn row={row} />
           </div>
         </div>
@@ -466,6 +470,7 @@ function MobileStack(p: TeleTemplateProps) {
         <div className="min-w-0 overflow-hidden"><ActionIcons row={row} actions={actions} dense /></div>
         <div className="flex items-center gap-1 shrink-0">
           <ReassignMenu row={row} staff={staff} actions={actions} dense />
+          <ReviewButton row={row} actions={actions} compact />
           <NewOrderBtn row={row} size="icon" />
         </div>
       </div>
@@ -509,6 +514,9 @@ function MobileMinimal(p: TeleTemplateProps) {
             ))}
             <DropdownMenuItem disabled={!row.assigned_to} onClick={() => actions.onReassign(row.id, null)}>Unassign</DropdownMenuItem>
             <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => actions.onOpenReviews(row.phone, row.name, row.order_id)}>
+              <Star className="h-3.5 w-3.5 text-amber-400 fill-amber-400" /> Review
+            </DropdownMenuItem>
             <DropdownMenuItem asChild><Link to="/orders/new" search={{ name: row.name ?? undefined, phone: row.phone || undefined, address: row.address ?? undefined, source: "telesales" }}><Plus className="h-3.5 w-3.5" /> New Order</Link></DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -539,6 +547,7 @@ function MobileContactFirst(p: TeleTemplateProps) {
           <div className="min-w-0 overflow-hidden"><ActionIcons row={row} actions={actions} dense /></div>
           <div className="flex items-center gap-1 shrink-0">
             <ReassignMenu row={row} staff={staff} actions={actions} dense />
+            <ReviewButton row={row} actions={actions} compact />
             <NewOrderBtn row={row} size="icon" />
           </div>
         </div>
@@ -576,6 +585,7 @@ function MobileActionGrid(p: TeleTemplateProps) {
         })}
         <div className="flex items-center justify-center gap-1 min-w-0">
           <ReassignMenu row={row} staff={staff} actions={actions} dense />
+          <ReviewButton row={row} actions={actions} compact />
           <NewOrderBtn row={row} size="icon" />
         </div>
       </div>
