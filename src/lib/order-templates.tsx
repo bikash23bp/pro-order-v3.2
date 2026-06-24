@@ -217,12 +217,21 @@ function ItemsList({ order, dense = false }: { order: OrderForTemplate; dense?: 
         return (
           <div key={i} className="flex items-center gap-2">
             {img ? (
-              <img
-                src={img}
-                alt={it.products?.name ?? ""}
-                loading="lazy"
-                className={`${size} rounded-md border border-border/60 object-cover bg-muted shrink-0`}
-              />
+              <a
+                href={img}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                title="ছবি পুরো সাইজে দেখুন"
+                className="shrink-0"
+              >
+                <img
+                  src={img}
+                  alt={it.products?.name ?? ""}
+                  loading="lazy"
+                  className={`${size} rounded-md border border-border/60 object-cover bg-muted cursor-zoom-in hover:opacity-90 transition`}
+                />
+              </a>
             ) : (
               <div className={`${size} rounded-md border border-border/60 bg-muted flex items-center justify-center shrink-0`}>
                 <Package className="h-4 w-4 text-muted-foreground/60" />
@@ -677,7 +686,16 @@ function MobilePhoto(p: OrderTemplateProps) {
     }`}>
       {heroImg ? (
         <div className="relative h-32 bg-muted">
-          <img src={heroImg} alt="" loading="lazy" className="w-full h-full object-cover" />
+          <a
+            href={heroImg}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            title="ছবি পুরো সাইজে দেখুন"
+            className="absolute inset-0 block"
+          >
+            <img src={heroImg} alt="" loading="lazy" className="w-full h-full object-cover cursor-zoom-in" />
+          </a>
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
           <div className="absolute top-2 left-2"><Checkbox checked={flags.isSelected} onCheckedChange={() => actions.toggleOne(order.id)} /></div>
           <div className="absolute top-2 right-2"><StatusSelect order={order} actions={actions} size="sm" /></div>

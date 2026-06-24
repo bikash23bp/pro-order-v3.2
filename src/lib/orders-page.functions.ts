@@ -287,7 +287,7 @@ async function enrichOrdersForList(context: any, orders: any[]) {
     orderIds.length
       ? context.supabase
           .from("order_items")
-          .select("order_id, quantity, unit_price, products(name), product_variants(attributes)")
+            .select("order_id, quantity, unit_price, products(name, image_url), product_variants(attributes, image_url)")
           .in("order_id", orderIds)
       : Promise.resolve({ data: [] }),
   ]);
