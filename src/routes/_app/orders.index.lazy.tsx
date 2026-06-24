@@ -241,7 +241,7 @@ const TAB_STATUSES: TabDef[] = [
 // Long-lived cache: একবার লোড হলে অনেকক্ষণ memory-তে থাকে যাতে বার বার
 // orders পেইজে গেলে আর reload না লাগে। Mutations + realtime থেকে
 // invalidate হলে স্বয়ংক্রিয়ভাবে refresh হবে।
-const ORDER_LIST_STALE_MS = 60 * 60_000;       // 1 hour fresh
+const ORDER_LIST_STALE_MS = 5 * 60 * 60_000;   // 5 hours fresh — পেইজে ফিরে এলে reload হবে না
 const ORDER_LIST_GC_MS = 24 * 60 * 60_000;     // 24 hour cache retention
 const transientOrderLoadRetry = (failureCount: number, error: unknown) => {
   const message = error instanceof Error ? error.message : String(error ?? "");
