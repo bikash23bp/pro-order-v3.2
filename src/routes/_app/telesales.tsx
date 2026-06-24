@@ -488,6 +488,15 @@ function TelesalesPage() {
           customerName={complaintFor.name}
         />
       )}
+
+      {reviewFor && (
+        <ReviewDialog
+          open={!!reviewFor}
+          onOpenChange={(v) => { if (!v) setReviewFor(null); }}
+          phone={reviewFor.phone}
+          customerName={reviewFor.name}
+        />
+      )}
     </div>
   );
 }
