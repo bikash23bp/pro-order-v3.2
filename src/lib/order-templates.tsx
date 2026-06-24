@@ -12,6 +12,31 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 
+// ---- Image helpers ----
+// Supabase Storage render endpoint supports on-the-fly width/quality/format
+// transforms via `/storage/v1/render/image/public/...?width=&quality=&format=`.
+// For non-Supabase URLs we return the original src unchanged.
+function transformImg(src: string, width: number, quality = 70): string {
+  try {
+    const u = new URL(src);
+    if (u.pathname.includes("/storage/v1/object/public/")) {
+      u.pathname = u.pathname.replace(
+        "/storage/v1/object/public/",
+        "/storage/v1/render/image/public/",
+      );
+    }
+    if (u.pathname.includes("/storage/v1/render/image/public/")) {
+      u.searchParams.set("width", String(width));
+      u.searchParams.set("quality", String(quality));
+      u.searchParams.set("resize", "cover");
+      return u.toString();
+    }
+    return src;
+  } catch {
+    return src;
+  }
+}
+
 // ----------------- Types -----------------
 
 export type OrderStatus =
