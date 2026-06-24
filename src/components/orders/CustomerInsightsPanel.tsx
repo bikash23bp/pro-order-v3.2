@@ -62,7 +62,7 @@ function saveFraudLS(phone: string, value: FraudReport) {
   } catch { /* ignore quota errors */ }
 }
 
-export function CustomerInsightsPanel({ phone }: { phone: string }) {
+export function CustomerInsightsPanel({ phone, orderId }: { phone: string; orderId?: string | null }) {
   const [history, setHistory] = useState<HistoryData | null>(null);
   const [fraud, setFraud] = useState<FraudReport | null>(null);
   const [tags, setTags] = useState<CustomerTag[]>([]);
@@ -238,6 +238,7 @@ export function CustomerInsightsPanel({ phone }: { phone: string }) {
           onOpenChange={async (v) => { setShowReviews(v); if (!v) await loadReviewSummary(); }}
           phone={trimmedPhone}
           customerName={null}
+          orderId={orderId ?? null}
         />
       )}
       {tags.length > 0 && (
