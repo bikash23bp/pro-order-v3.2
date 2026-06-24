@@ -355,6 +355,32 @@ export async function syncWooOrdersAll(
           if (itErr) console.error("[woo-sync order_items insert]", itErr.message);
         }
 
+        // Promote: if the same shopper had a pending "incomplete" row from
+        // the WP tracker for this site, the real Woo order makes it obsolete.
+        // Remove duplicates by matching last 10 digits of the phone.
+        try {
+          const last10 = phone.replace(/\D/g, "").slice(-10);
+          if (last10.length >= 7) {
+            const { data: dupIncomplete } = await supabase
+              .from("orders")
+              .select("id, customer_phone")
+              .eq("source", "woocommerce_incomplete")
+              .eq("source_site_id", s.id)
+              .eq("status", "incomplete");
+            const toDelete = (dupIncomplete ?? [])
+              .filter((r: { customer_phone: string | null }) =>
+                (r.customer_phone || "").replace(/\D/g, "").slice(-10) === last10,
+              )
+              .map((r: { id: string }) => r.id);
+            if (toDelete.length > 0) {
+              await supabase.from("order_items").delete().in("order_id", toDelete);
+              await supabase.from("orders").delete().in("id", toDelete);
+            }
+          }
+        } catch (e) {
+          console.error("[woo-sync incomplete cleanup]", e);
+        }
+
         // Flip the order in WooCommerce to "on-hold" so the merchant sees
         // OMS has taken ownership. Skip terminal/already-on-hold statuses.
         if (!TERMINAL_WOO_STATUSES.has(o.status)) {
