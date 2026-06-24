@@ -223,6 +223,23 @@ export function CustomerInsightsPanel({ phone }: { phone: string }) {
           customerName={null}
         />
       )}
+      {trimmedPhone.replace(/\D/g, "").length >= 6 && (
+        <Button size="sm" variant="ghost" className="w-full justify-start text-xs"
+          onClick={() => setShowReviews(true)}>
+          <Star className="h-3.5 w-3.5 mr-1 text-amber-400 fill-amber-400" />
+          {reviewSummary.count > 0
+            ? `${reviewSummary.avg.toFixed(1)} ★ • ${reviewSummary.count} review${reviewSummary.count > 1 ? "s" : ""}`
+            : "Add / view reviews"}
+        </Button>
+      )}
+      {showReviews && (
+        <ReviewDialog
+          open={showReviews}
+          onOpenChange={async (v) => { setShowReviews(v); if (!v) await loadReviewSummary(); }}
+          phone={trimmedPhone}
+          customerName={null}
+        />
+      )}
       {tags.length > 0 && (
         <div className="flex items-start gap-2 rounded-md border bg-muted/30 p-2.5 text-xs">
           <Tags className="h-3.5 w-3.5 mt-0.5 text-muted-foreground shrink-0" />
