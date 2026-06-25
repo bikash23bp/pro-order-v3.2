@@ -1705,8 +1705,6 @@ function OrdersPage() {
                 {ordersQuery.isFetching ? "Retrying…" : "Retry"}
               </Button>
             </div>
-          ) : totalCount === 0 && countsPriming ? (
-            <div className="p-12 text-center text-muted-foreground">Loading orders…</div>
           ) : totalCount === 0 ? (
             <div className="p-12 text-center text-muted-foreground">No orders found.</div>
           ) : (
