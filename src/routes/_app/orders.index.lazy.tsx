@@ -630,6 +630,17 @@ function OrdersPage() {
     if (ordersQuery.error) toast.error((ordersQuery.error as Error).message);
   }, [ordersQuery.error]);
 
+  // Auto-retry when the list times out — avoids the user having to
+  // manually click Retry. Waits 3s before retrying so the DB gets a
+  // brief breather between the two concurrent heavy queries.
+  useEffect(() => {
+    if (!listTimedOut) return;
+    const t = setTimeout(() => {
+      void ordersQuery.refetch();
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [listTimedOut, ordersQuery]);
+
   // Background-warm the other primary tabs after the first paint so clicking
   // them feels instant. Runs once per filter-set; respects the same stale window.
   const warmedFiltersRef = useRef<string>("");
