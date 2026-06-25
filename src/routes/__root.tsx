@@ -7,6 +7,9 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { persistQueryClient } from "@tanstack/react-query-persist-client";
+import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
@@ -138,6 +141,27 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  // Persist React Query cache to localStorage so a browser reload restores
+  // the previously-fetched data instantly (no full reload flash). Background
+  // refetches + realtime keep it fresh.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const persister = createSyncStoragePersister({
+        storage: window.localStorage,
+        key: "oms-rq-cache-v1",
+        throttleTime: 1000,
+      });
+      const [unsubscribe] = persistQueryClient({
+        queryClient,
+        persister,
+        maxAge: 24 * 60 * 60 * 1000, // 24h
+        buster: "v1",
+      });
+      return () => { unsubscribe?.(); };
+    } catch { /* localStorage unavailable — skip persistence */ }
+  }, [queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>
