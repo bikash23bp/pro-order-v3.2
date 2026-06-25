@@ -156,7 +156,7 @@ function RootComponent() {
       const [unsubscribe] = persistQueryClient({
         queryClient,
         persister,
-        maxAge: 24 * 60 * 60 * 1000, // 24h
+        maxAge: 60 * 60 * 1000, // 1h
         buster: "v1",
       });
       return () => { unsubscribe?.(); };

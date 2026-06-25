@@ -23,7 +23,7 @@ export function DuplicateTopbarAlert() {
       } catch {/* ignore */}
     };
     load();
-    const id = window.setInterval(load, 15_000);
+    const id = window.setInterval(load, 60_000);
     const onFocus = () => load();
     const onVisible = () => { if (document.visibilityState === "visible") load(); };
     const onOrdersChanged = () => load();

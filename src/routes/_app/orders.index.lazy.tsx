@@ -208,7 +208,7 @@ const TAB_STATUSES: TabDef[] = [
 // as stale so Orders + tab counters refetch together in the background. This
 // avoids the old mismatch where a tab showed one status while cards still came
 // from a previous cached tab.
-const ORDER_LIST_STALE_MS = 0;
+const ORDER_LIST_STALE_MS = 30_000; // 30 seconds — realtime keeps it fresh
 const ORDER_LIST_GC_MS = 24 * 60 * 60_000;     // 24 hour cache retention
 const transientOrderLoadRetry = (failureCount: number, error: unknown) => {
   const message = error instanceof Error ? error.message : String(error ?? "");
@@ -658,7 +658,7 @@ function OrdersPage() {
       const warmKeys = ["pending", "processing", "ready_to_ship"]
         .filter((k) => k !== effectiveStatusFilter);
       warmKeys.forEach((k, index) => {
-        warmTimers.push(window.setTimeout(() => prefetchOrderTab(k), 2000 * (index + 1)));
+        warmTimers.push(window.setTimeout(() => prefetchOrderTab(k), 2500 * (index + 1)));
       });
     });
     return () => warmTimers.forEach((t) => window.clearTimeout(t));
@@ -735,7 +735,7 @@ function OrdersPage() {
 
   const countsQuery = useQuery({
     queryKey: countsQueryKey,
-    enabled: !!session && (!search.dup || dupePhonesReady) && !ordersQuery.isFetching,
+    enabled: !!session && (!search.dup || dupePhonesReady),
     staleTime: ORDER_LIST_STALE_MS,
     gcTime: ORDER_LIST_GC_MS,
     refetchOnWindowFocus: true,
@@ -881,11 +881,7 @@ function OrdersPage() {
   };
   const countsPriming = !tabCountsData && !countsQuery.isError && (ordersQuery.isPending || countsQuery.isPending || countsQuery.isFetching || !countsQuery.data);
   const countsUnavailable = countsQuery.isError || (!countsPriming && !tabCountsData);
-  const tabCountFor = (key: string) => (
-    !tabCountsData && key === effectiveStatusFilter && !ordersQuery.isPending
-      ? totalCount
-      : tabCounts[key] ?? 0
-  );
+  const tabCountFor = (key: string) => tabCounts[key] ?? 0;
   const tabCountUnavailableFor = (key: string) => countsUnavailable && key !== effectiveStatusFilter;
   const fmtTabAmount = (key: string) => countsUnavailable ? "৳ —" : `৳ ${fmtAmount(tabAmounts[key] ?? 0)}`;
 
