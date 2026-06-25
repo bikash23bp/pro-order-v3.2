@@ -641,17 +641,6 @@ function OrdersPage() {
     return () => clearTimeout(t);
   }, [listTimedOut, ordersQuery]);
 
-  // Auto-retry when the tab-counts RPC errors / times out. With
-  // placeholderData: keepPreviousData the previous good counts stay
-  // visible while we silently retry in the background — no 0-flicker.
-  useEffect(() => {
-    if (!countsQuery.isError) return;
-    const t = setTimeout(() => {
-      void countsQuery.refetch();
-    }, 3000);
-    return () => clearTimeout(t);
-  }, [countsQuery.isError, countsQuery]);
-
   // Background-warm the other primary tabs after the first paint so clicking
   // them feels instant. Runs once per filter-set; respects the same stale window.
   const warmedFiltersRef = useRef<string>("");
