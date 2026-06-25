@@ -445,12 +445,13 @@ export const getOrderCountsPage = createServerFn({ method: "POST" })
     const today = new Date().toISOString().slice(0, 10);
     const { count, error: dueError } = await context.supabase.from("orders").select("id", { count: "exact", head: true }).eq("preorder", true).not("preorder_date", "is", null).lte("preorder_date", today);
     const preorderDueCount = dueError && isStatementTimeout(dueError) ? 0 : (count ?? 0);
-    // Sent-to-Partner tab: simple count + amount sum, respects the same common filters as the RPC inputs.
+    // Sent-to-Partner tab: count-only on purpose; pulling every forwarded row just to sum
+    // totals made the order page slow on large datasets.
     let sentToPartnerBucket: { count: number; amount: number } = { count: 0, amount: 0 };
     try {
       let stp: any = context.supabase
         .from("orders")
-        .select("total_amount", { count: "exact" })
+        .select("id", { count: "exact", head: true })
         .not("forwarded_to_partner_at", "is", null);
       if (data.source && data.source !== "all") stp = stp.eq("order_source_id", data.source);
       if (data.site && data.site !== "all") stp = stp.eq("source_site_id", data.site);
@@ -459,11 +460,9 @@ export const getOrderCountsPage = createServerFn({ method: "POST" })
       if (data.staff && data.staff !== "all") stp = stp.eq("created_by", data.staff);
       if (data.from && data.to) stp = stp.gte("created_at", data.from).lte("created_at", data.to);
       if (data.advanceOnly) stp = stp.gt("advance_amount", 0);
-      const { data: stpRows, count: stpCount, error: stpErr } = await stp;
+      const { count: stpCount, error: stpErr } = await stp;
       if (!stpErr) {
-        const amount = ((stpRows ?? []) as Array<{ total_amount: number | string | null }>)
-          .reduce((a, r) => a + (Number(r.total_amount ?? 0) || 0), 0);
-        sentToPartnerBucket = { count: stpCount ?? (stpRows?.length ?? 0), amount };
+        sentToPartnerBucket = { count: stpCount ?? 0, amount: 0 };
       }
     } catch (err) {
       /* keep zero bucket for older schemas/caches */
