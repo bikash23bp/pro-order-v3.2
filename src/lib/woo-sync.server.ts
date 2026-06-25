@@ -399,10 +399,6 @@ export async function syncWooOrdersAll(
         } catch (e) {
           console.error("[woo-sync incomplete cleanup]", e);
         }
-          }
-        } catch (e) {
-          console.error("[woo-sync incomplete cleanup]", e);
-        }
 
         // Flip the order in WooCommerce to "on-hold" so the merchant sees
         // OMS has taken ownership. Skip terminal/already-on-hold statuses.
