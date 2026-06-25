@@ -724,12 +724,12 @@ function OrdersPage() {
 
   const countsQuery = useQuery({
     queryKey: countsQueryKey,
-    enabled: !!session && (!search.dup || dupePhonesReady) && !ordersQuery.isPending,
+    enabled: !!session && (!search.dup || dupePhonesReady) && !ordersQuery.isFetching,
     staleTime: ORDER_LIST_STALE_MS,
     gcTime: ORDER_LIST_GC_MS,
     refetchOnWindowFocus: true,
     refetchOnMount: "always",
-    retry: false,
+    retry: 1,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
     queryFn: async () => {
       return await getOrderCounts({ data: {
