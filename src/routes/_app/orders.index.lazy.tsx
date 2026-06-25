@@ -108,6 +108,7 @@ type Order = {
   oms_sender_order_no?: string | null;
   order_sources: { name: string } | null;
   site_name?: string | null;
+  review_summary?: { count: number; avg: number } | null;
   customer_flags?: {
     is_vip?: boolean;
     is_repeat?: boolean;

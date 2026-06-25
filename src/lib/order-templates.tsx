@@ -3,9 +3,8 @@ import { Link } from "@tanstack/react-router";
 import {
   Eye, Pencil, Trash2, FileText, Phone, Truck, StickyNote, Crown, Package,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Star } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -13,31 +12,9 @@ import { MemberBadge } from "@/components/MemberBadge";
 import { DuplicateBadge } from "@/components/orders/DuplicateBadge";
 import { ReviewDialog } from "@/components/reviews/ReviewDialog";
 
-// In-memory cache so the same order doesn't re-fetch on every re-render / page swap.
-const reviewCache = new Map<string, { count: number; avg: number }>();
-
-function OrderReviewBadge({ orderId, phone, customerName }: { orderId: string; phone: string; customerName: string }) {
-  const [s, setS] = useState<{ count: number; avg: number } | null>(
-    () => reviewCache.get(orderId) ?? null,
-  );
+function OrderReviewBadge({ orderId, phone, customerName, summary }: { orderId: string; phone: string; customerName: string; summary?: { count: number; avg: number } | null }) {
+  const s = summary ?? null;
   const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (reviewCache.has(orderId)) { setS(reviewCache.get(orderId)!); return; }
-    let alive = true;
-    (async () => {
-      const { data } = await (supabase as any)
-        .from("customer_reviews")
-        .select("rating")
-        .eq("order_id", orderId);
-      const arr = (data ?? []) as Array<{ rating: number }>;
-      const count = arr.length;
-      const avg = count ? arr.reduce((x, r) => x + Number(r.rating), 0) / count : 0;
-      const v = { count, avg };
-      reviewCache.set(orderId, v);
-      if (alive) setS(v);
-    })().catch(() => {});
-    return () => { alive = false; };
-  }, [orderId]);
   if (!s || s.count === 0) return null;
   return (
     <>
@@ -120,6 +97,7 @@ export type OrderForTemplate = {
     products: { name: string; image_url?: string | null } | null;
     product_variants?: { image_url: string | null; attributes: Record<string, string> | null } | null;
   }> | null;
+  review_summary?: { count: number; avg: number } | null;
 };
 
 export type OrderTemplateFlags = {
@@ -261,7 +239,7 @@ function CustomerBadges({ order, flags, actions }: OrderTemplateProps) {
         {order.customer_name}
       </button>
       <MemberBadge phone={order.customer_phone} />
-      <OrderReviewBadge orderId={order.id} phone={order.customer_phone} customerName={order.customer_name} />
+      <OrderReviewBadge orderId={order.id} phone={order.customer_phone} customerName={order.customer_name} summary={order.review_summary} />
       {flags.isVip && (
         <Badge variant="outline" className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-[10px] px-1 py-0">
           <Crown className="h-3 w-3" /> VIP

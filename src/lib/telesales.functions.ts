@@ -94,7 +94,22 @@ export type TeleAssignment = {
   complaint_count: number;
   order_id: string | null;
   duplicate_count: number;
+  review_summary: { count: number; avg: number } | null;
 };
+
+export type TeleAssignmentsPage = {
+  rows: TeleAssignment[];
+  total: number;
+};
+
+function isMissingReviewTableError(error: unknown): boolean {
+  const e = error as { code?: string; message?: string } | null | undefined;
+  const message = (e?.message ?? "").toLowerCase();
+  return e?.code === "PGRST205"
+    || (message.includes("customer_reviews") && message.includes("schema cache"))
+    || message.includes('relation "public.customer_reviews" does not exist')
+    || message.includes('relation "customer_reviews" does not exist');
+}
 
 export const listTelesalesAssignments = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -105,7 +120,8 @@ export const listTelesalesAssignments = createServerFn({ method: "POST" })
       orderTab: z.boolean().optional(),
       assignedTo: z.string().uuid().nullable().optional(),
       search: z.string().max(200).optional(),
-      limit: z.number().min(1).max(500).default(100),
+      page: z.number().int().min(1).default(1),
+      limit: z.number().min(1).max(100).default(20),
     }).parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -115,22 +131,49 @@ export const listTelesalesAssignments = createServerFn({ method: "POST" })
       .from("user_roles").select("role").eq("user_id", userId).maybeSingle();
     const isAdmin = (roleRow?.role === "admin" || roleRow?.role === "business_owner");
 
-    let q = supabase
-      .from("telesales_assignments")
-      .select("id, customer_id, status, last_action, note, last_contacted_at, assigned_to, order_id" as never)
-      .order("updated_at", { ascending: false })
-      .limit(data.limit);
+    const search = (data.search ?? "").trim();
+    let searchCustomerIds: string[] | null = null;
+    if (search) {
+      const safe = search.replace(/[%,()]/g, "");
+      const { data: customerMatches, error: customerMatchError } = await supabase
+        .from("imported_customers")
+        .select("id")
+        .or(`name.ilike.%${safe}%,phone.ilike.%${safe}%,address.ilike.%${safe}%`)
+        .limit(5000);
+      if (customerMatchError) throw new Error(customerMatchError.message);
+      searchCustomerIds = Array.from(new Set(((customerMatches ?? []) as Array<{ id: string }>).map((r) => r.id)));
+      if (searchCustomerIds.length === 0) return { rows: [], total: 0 } as TeleAssignmentsPage;
+    }
 
-    if (data.orderTab) q = q.not("order_id", "is", null);
-    else if (data.action) q = q.eq("last_action", data.action);
-    else if (data.status === "pending") q = q.eq("status", "pending").is("last_action", null);
-    else if (data.status) q = q.eq("status", data.status);
-    if (data.assignedTo === null) q = q.is("assigned_to", null);
-    else if (data.assignedTo) q = q.eq("assigned_to", data.assignedTo);
-    else if (!isAdmin) q = q.eq("assigned_to", userId);
+    const applyFilters = (qb: any) => {
+      if (data.orderTab) qb = qb.not("order_id", "is", null);
+      else if (data.action) qb = qb.eq("last_action", data.action);
+      else if (data.status === "pending") qb = qb.eq("status", "pending").is("last_action", null);
+      else if (data.status) qb = qb.eq("status", data.status);
+      if (data.assignedTo === null) qb = qb.is("assigned_to", null);
+      else if (data.assignedTo) qb = qb.eq("assigned_to", data.assignedTo);
+      else if (!isAdmin) qb = qb.eq("assigned_to", userId);
+      if (searchCustomerIds) qb = qb.in("customer_id", searchCustomerIds);
+      return qb;
+    };
 
-    const { data: rows, error } = await q;
+    const offset = (data.page - 1) * data.limit;
+    const rowsQuery = applyFilters(
+      supabase
+        .from("telesales_assignments")
+        .select("id, customer_id, status, last_action, note, last_contacted_at, assigned_to, order_id" as never)
+        .order("updated_at", { ascending: false })
+        .range(offset, offset + data.limit - 1),
+    );
+    const countQuery = applyFilters(
+      supabase
+        .from("telesales_assignments")
+        .select("id", { count: "exact", head: true }),
+    );
+
+    const [{ data: rows, error }, { count, error: countError }] = await Promise.all([rowsQuery, countQuery]);
     if (error) throw new Error(error.message);
+    if (countError) throw new Error(countError.message);
 
     const list = ((rows ?? []) as unknown) as Array<{
       id: string; customer_id: string; status: string;
@@ -138,7 +181,7 @@ export const listTelesalesAssignments = createServerFn({ method: "POST" })
       last_contacted_at: string | null; assigned_to: string | null;
       order_id: string | null;
     }>;
-    if (list.length === 0) return [] as TeleAssignment[];
+    if (list.length === 0) return { rows: [], total: count ?? 0 } as TeleAssignmentsPage;
 
     const customerIds = [...new Set(list.map((r) => r.customer_id))];
     const userIds = [...new Set(list.map((r) => r.assigned_to).filter(Boolean) as string[])];
@@ -164,12 +207,16 @@ export const listTelesalesAssignments = createServerFn({ method: "POST" })
     const rawPhones = (customers ?? []).map((c) => c.phone).filter(Boolean) as string[];
     const countMap = new Map<string, number>();
     const complaintMap = new Map<string, number>();
+    const reviewMap = new Map<string, { sum: number; ids: Set<string> }>();
     if (phones.length) {
-      const [{ data: orderPhones }, { data: complaints }] = await Promise.all([
+      const [{ data: orderPhones }, { data: complaints }, reviewRes] = await Promise.all([
         supabase.from("orders").select("phone_normalized").in("phone_normalized", phones),
         rawPhones.length
           ? supabase.from("customer_complaints").select("phone, status").in("phone", rawPhones)
           : Promise.resolve({ data: [] as { phone: string; status: string }[] }),
+        rawPhones.length
+          ? (supabase as any).from("customer_reviews").select("id, phone, rating").in("phone", rawPhones)
+          : Promise.resolve({ data: [] as { id: string; phone: string; rating: number }[], error: null }),
       ]);
       for (const r of orderPhones ?? []) {
         const k = r.phone_normalized as string | null;
@@ -180,12 +227,26 @@ export const listTelesalesAssignments = createServerFn({ method: "POST" })
         if (!n) continue;
         complaintMap.set(n, (complaintMap.get(n) ?? 0) + 1);
       }
+      if (!reviewRes.error) {
+        for (const review of (reviewRes.data ?? []) as Array<{ id: string; phone: string; rating: number }>) {
+          const n = normalizePhone(review.phone);
+          if (!n) continue;
+          const cur = reviewMap.get(n) ?? { sum: 0, ids: new Set<string>() };
+          if (!cur.ids.has(review.id)) {
+            cur.ids.add(review.id);
+            cur.sum += Number(review.rating);
+          }
+          reviewMap.set(n, cur);
+        }
+      } else if (!isMissingReviewTableError(reviewRes.error)) {
+        throw new Error(reviewRes.error.message);
+      }
     }
 
-    const search = (data.search ?? "").trim().toLowerCase();
     const result: TeleAssignment[] = list.map((r) => {
       const c = cMap.get(r.customer_id);
       const norm = c ? normalizePhone(c.phone) : null;
+      const reviews = norm ? reviewMap.get(norm) : undefined;
       return {
         id: r.id,
         customer_id: r.customer_id,
@@ -202,16 +263,13 @@ export const listTelesalesAssignments = createServerFn({ method: "POST" })
         complaint_count: norm ? complaintMap.get(norm) ?? 0 : 0,
         order_id: r.order_id ?? null,
         duplicate_count: dupMap.get(r.customer_id) ?? 1,
+        review_summary: reviews && reviews.ids.size > 0
+          ? { count: reviews.ids.size, avg: reviews.sum / reviews.ids.size }
+          : null,
       };
     });
 
-    return search
-      ? result.filter((r) =>
-          (r.name ?? "").toLowerCase().includes(search) ||
-          r.phone.toLowerCase().includes(search) ||
-          (r.address ?? "").toLowerCase().includes(search),
-        )
-      : result;
+    return { rows: result, total: count ?? result.length } as TeleAssignmentsPage;
   });
 
 export const getTelesalesCounts = createServerFn({ method: "POST" })
@@ -228,32 +286,37 @@ export const getTelesalesCounts = createServerFn({ method: "POST" })
     const base = () => {
       let q = supabase
         .from("telesales_assignments")
-        .select("status, last_action, order_id" as never)
-        .range(0, 49999);
+        .select("id", { count: "exact", head: true });
       if (data.assignedTo === null) q = q.is("assigned_to", null);
       else if (data.assignedTo) q = q.eq("assigned_to", data.assignedTo);
       else if (!isAdmin) q = q.eq("assigned_to", userId);
       return q;
     };
-    const { data: rows, error } = await base();
-    if (error) throw new Error(error.message);
-    const c = {
-      all: 0, order: 0,
-      pending: 0, complete: 0, hold: 0, total: 0,
-      phone_off: 0, not_received: 0, will_take_later: 0, fraud: 0, call_back_later: 0,
+
+    const exactCount = async (apply: (qb: any) => any) => {
+      const { count, error } = await apply(base());
+      if (error) throw new Error(error.message);
+      return count ?? 0;
     };
-    for (const r of (rows ?? []) as unknown as Array<{ status: string; last_action: string | null; order_id: string | null }>) {
-      const a = r.last_action as keyof typeof c | null;
-      const s = r.status as keyof typeof c;
-      c.all++;
-      if (r.order_id) c.order++;
-      // "Pending" tab only counts rows that have no action yet
-      if (s === "pending" && !a) c.pending++;
-      else if (s === "complete" || s === "hold") c[s]++;
-      if (a && a in c) c[a] = (c[a] as number) + 1;
-      c.total++;
-    }
-    return c;
+
+    const [all, order, pending, complete, hold, phone_off, not_received, will_take_later, fraud, call_back_later] = await Promise.all([
+      exactCount((q) => q),
+      exactCount((q) => q.not("order_id", "is", null)),
+      exactCount((q) => q.eq("status", "pending").is("last_action", null)),
+      exactCount((q) => q.eq("status", "complete")),
+      exactCount((q) => q.eq("status", "hold")),
+      exactCount((q) => q.eq("last_action", "phone_off")),
+      exactCount((q) => q.eq("last_action", "not_received")),
+      exactCount((q) => q.eq("last_action", "will_take_later")),
+      exactCount((q) => q.eq("last_action", "fraud")),
+      exactCount((q) => q.eq("last_action", "call_back_later")),
+    ]);
+
+    return {
+      all, order,
+      pending, complete, hold, total: all,
+      phone_off, not_received, will_take_later, fraud, call_back_later,
+    };
   });
 
 export const markTelesalesOrderTaken = createServerFn({ method: "POST" })

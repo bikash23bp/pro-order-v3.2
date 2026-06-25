@@ -21,33 +21,9 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MemberBadge } from "@/components/MemberBadge";
-import { supabase } from "@/integrations/supabase/client";
-
-// Cache so repeated renders/page switches don't refetch the same phone.
-const teleReviewCache = new Map<string, { count: number; avg: number }>();
 
 function TeleReviewBadge({ row, actions }: { row: TeleRow; actions: TeleTemplateActions }) {
-  const phone = row.phone;
-  const [s, setS] = useState<{ count: number; avg: number } | null>(
-    () => teleReviewCache.get(phone) ?? null,
-  );
-  useEffect(() => {
-    if (teleReviewCache.has(phone)) { setS(teleReviewCache.get(phone)!); return; }
-    let alive = true;
-    (async () => {
-      const { data } = await (supabase as any)
-        .from("customer_reviews")
-        .select("rating")
-        .eq("phone", phone);
-      const arr = (data ?? []) as Array<{ rating: number }>;
-      const count = arr.length;
-      const avg = count ? arr.reduce((x, r) => x + Number(r.rating), 0) / count : 0;
-      const v = { count, avg };
-      teleReviewCache.set(phone, v);
-      if (alive) setS(v);
-    })().catch(() => {});
-    return () => { alive = false; };
-  }, [phone]);
+  const s = row.review_summary ?? null;
   if (!s || s.count === 0) return null;
   return (
     <button
@@ -81,6 +57,7 @@ export type TeleRow = {
   complaint_count: number;
   order_id: string | null;
   duplicate_count?: number;
+  review_summary?: { count: number; avg: number } | null;
 };
 
 export type TeleStaff = { id: string; name: string };
