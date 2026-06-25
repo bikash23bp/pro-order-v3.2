@@ -60,8 +60,8 @@ function normalizePhone(raw: string | undefined | null): string | null {
   return tail.length === 11 ? tail : null;
 }
 
-const INCOMPLETE_MATCH_WINDOW_DAYS = 14;
-const DAY_MS = 24 * 60 * 60 * 1000;
+const INCOMPLETE_MATCH_WINDOW_HOURS = 12;
+const HOUR_MS = 60 * 60 * 1000;
 
 function parseDate(raw: string | undefined | null): Date | null {
   if (!raw) return null;
@@ -79,7 +79,7 @@ async function deleteObsoleteIncompleteOrders(
   if (!phoneNormalized) return 0;
   const placedAt = parseDate(placedAtRaw);
   if (!placedAt) return 0;
-  const oldestIncompleteAt = new Date(placedAt.getTime() - INCOMPLETE_MATCH_WINDOW_DAYS * DAY_MS);
+  const oldestIncompleteAt = new Date(placedAt.getTime() - INCOMPLETE_MATCH_WINDOW_HOURS * HOUR_MS);
   const { data: dupIncomplete, error } = await supabase
     .from("orders")
     .select("id")
