@@ -793,6 +793,7 @@ function OrdersPage() {
         }
         refreshOrdersNow();
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, refreshOrdersNow)
       .subscribe();
     return () => {
       if (refreshTimer) clearTimeout(refreshTimer);
