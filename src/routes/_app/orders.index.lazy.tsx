@@ -870,7 +870,7 @@ function OrdersPage() {
   const countsPriming = !tabCountsData && !countsQuery.isError && (ordersQuery.isPending || countsQuery.isPending || countsQuery.isFetching || !countsQuery.data);
   const countsUnavailable = countsQuery.isError || (!countsPriming && !tabCountsData);
   const tabCountFor = (key: string) => (
-    !tabCountsData && key === effectiveStatusFilter && !ordersQuery.isPending
+    key === effectiveStatusFilter && !ordersQuery.isPending
       ? totalCount
       : tabCounts[key] ?? 0
   );
