@@ -812,11 +812,50 @@ function OrdersPage() {
   // Realtime — keep high-volume order imports from causing constant refetch loops.
   useEffect(() => {
     if (!session) return;
-    let timer: ReturnType<typeof setTimeout> | null = null;
+    let insertTimer: ReturnType<typeof setTimeout> | null = null;
+    let countsTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleCountsRefresh = () => {
+      if (countsTimer) clearTimeout(countsTimer);
+      countsTimer = setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["orders", "counts"] });
+      }, 1500);
+    };
     const channel = supabase
       .channel("orders-list-sync")
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
-        if (payload.eventType === "INSERT") {
+        if (payload.eventType === "UPDATE") {
+          // Patch the changed row in every cached orders list — no refetch.
+          const updated = payload.new as Partial<Order> & { id: string };
+          queryClient.setQueriesData({ queryKey: ["orders", "list"] }, (prev: any) => {
+            if (!prev || !Array.isArray(prev.rows)) return prev;
+            let touched = false;
+            const rows = prev.rows.map((r: Order) => {
+              if (r.id !== updated.id) return r;
+              touched = true;
+              return { ...r, ...updated };
+            });
+            return touched ? { ...prev, rows } : prev;
+          });
+          scheduleCountsRefresh();
+          if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("orders:changed"));
+          return;
+        }
+        if (payload.eventType === "DELETE") {
+          const removed = payload.old as { id?: string };
+          if (removed?.id) {
+            queryClient.setQueriesData({ queryKey: ["orders", "list"] }, (prev: any) => {
+              if (!prev || !Array.isArray(prev.rows)) return prev;
+              const rows = prev.rows.filter((r: Order) => r.id !== removed.id);
+              if (rows.length === prev.rows.length) return prev;
+              return { ...prev, rows, totalCount: Math.max(0, (prev.totalCount ?? rows.length) - 1) };
+            });
+          }
+          scheduleCountsRefresh();
+          if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("orders:changed"));
+          return;
+        }
+        // INSERT
+        {
           const order = payload.new as { order_number?: number; source?: string };
           toast.success(
             order.source === "woocommerce"
@@ -824,15 +863,16 @@ function OrdersPage() {
               : `Order #${order.order_number ?? ""} created`,
           );
         }
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(() => { void refetchAll(false, false); }, 4000);
+        if (insertTimer) clearTimeout(insertTimer);
+        insertTimer = setTimeout(() => { void refetchAll(false, false); }, 4000);
       })
       .subscribe();
     return () => {
-      if (timer) clearTimeout(timer);
+      if (insertTimer) clearTimeout(insertTimer);
+      if (countsTimer) clearTimeout(countsTimer);
       supabase.removeChannel(channel);
     };
-  }, [session, refetchAll]);
+  }, [session, refetchAll, queryClient]);
 
 
   const matchesTab = (r: Order, tab: string) => {
