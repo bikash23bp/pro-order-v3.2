@@ -54,6 +54,41 @@ function wooCustomFieldValue(o: { meta_data?: Array<{ key?: string; value?: unkn
   return typeof v === "string" ? v.trim() : String(v).trim();
 }
 
+function normalizePhone(raw: string | undefined | null): string | null {
+  const digits = (raw || "").replace(/[^0-9]/g, "");
+  const tail = digits.slice(-11);
+  return tail.length === 11 ? tail : null;
+}
+
+async function deleteObsoleteIncompleteOrders(
+  supabase: Sb,
+  siteId: string,
+  phone: string,
+): Promise<number> {
+  const phoneNormalized = normalizePhone(phone);
+  if (!phoneNormalized) return 0;
+  const { data: dupIncomplete, error } = await supabase
+    .from("orders")
+    .select("id")
+    .eq("source", "woocommerce_incomplete")
+    .eq("source_site_id", siteId)
+    .eq("status", "incomplete")
+    .eq("phone_normalized", phoneNormalized);
+  if (error) {
+    console.error("[woo-sync incomplete lookup]", error.message);
+    return 0;
+  }
+  const toDelete = (dupIncomplete ?? []).map((r: { id: string }) => r.id);
+  if (toDelete.length === 0) return 0;
+  await supabase.from("order_items").delete().in("order_id", toDelete);
+  const { error: deleteErr } = await supabase.from("orders").delete().in("id", toDelete);
+  if (deleteErr) {
+    console.error("[woo-sync incomplete cleanup]", deleteErr.message);
+    return 0;
+  }
+  return toDelete.length;
+}
+
 export function wooInvoiceNote(o: { customer_note?: string | null; meta_data?: Array<{ key?: string; value?: unknown; display_key?: string; display_value?: unknown }> }): string | null {
   const note = (o.customer_note ?? "").trim();
   const custom = wooCustomFieldValue(o);
@@ -267,14 +302,16 @@ export async function syncWooOrdersAll(
       };
 
       for (const o of orders) {
+        const b = o.billing || ({} as WooOrder["billing"]);
+        const sh = o.shipping || ({} as WooOrder["shipping"]);
+        const phone = (b.phone ?? "").trim() || "—";
+
         if (existingSet.has(String(o.id))) {
+          await deleteObsoleteIncompleteOrders(supabase, s.id, phone);
           skipped++;
           continue;
         }
-        const b = o.billing || ({} as WooOrder["billing"]);
-        const sh = o.shipping || ({} as WooOrder["shipping"]);
         const name = `${b.first_name ?? ""} ${b.last_name ?? ""}`.trim() || "Web Customer";
-        const phone = (b.phone ?? "").trim() || "—";
         const address = [
           sh.address_1 || b.address_1,
           sh.address_2 || b.address_2,
@@ -355,27 +392,13 @@ export async function syncWooOrdersAll(
           if (itErr) console.error("[woo-sync order_items insert]", itErr.message);
         }
 
-        // Promote: if the same shopper had a pending "incomplete" row from
-        // the WP tracker for this site, the real Woo order makes it obsolete.
-        // Remove duplicates by matching last 10 digits of the phone.
+        // Promote: if the same shopper had an incomplete row from the WP
+        // tracker for this site, the real Woo order makes it obsolete.
         try {
-          const last10 = phone.replace(/\D/g, "").slice(-10);
-          if (last10.length >= 7) {
-            const { data: dupIncomplete } = await supabase
-              .from("orders")
-              .select("id, customer_phone")
-              .eq("source", "woocommerce_incomplete")
-              .eq("source_site_id", s.id)
-              .eq("status", "incomplete");
-            const toDelete = (dupIncomplete ?? [])
-              .filter((r: { customer_phone: string | null }) =>
-                (r.customer_phone || "").replace(/\D/g, "").slice(-10) === last10,
-              )
-              .map((r: { id: string }) => r.id);
-            if (toDelete.length > 0) {
-              await supabase.from("order_items").delete().in("order_id", toDelete);
-              await supabase.from("orders").delete().in("id", toDelete);
-            }
+          await deleteObsoleteIncompleteOrders(supabase, s.id, phone);
+        } catch (e) {
+          console.error("[woo-sync incomplete cleanup]", e);
+        }
           }
         } catch (e) {
           console.error("[woo-sync incomplete cleanup]", e);

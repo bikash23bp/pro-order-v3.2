@@ -136,6 +136,38 @@ function formatAddress(b: WooOrder["billing"]): string {
     .join(", ");
 }
 
+function normalizePhone(raw: string | undefined | null): string | null {
+  const digits = (raw || "").replace(/[^0-9]/g, "");
+  const tail = digits.slice(-11);
+  return tail.length === 11 ? tail : null;
+}
+
+async function deleteObsoleteIncompleteOrders(sourceSiteId: string, customerPhone: string): Promise<number> {
+  const phoneNormalized = normalizePhone(customerPhone);
+  if (!phoneNormalized) return 0;
+  const admin = await getAdmin();
+  const { data, error } = await admin
+    .from("orders")
+    .select("id")
+    .eq("source", "woocommerce_incomplete")
+    .eq("source_site_id", sourceSiteId)
+    .eq("status", "incomplete")
+    .eq("phone_normalized", phoneNormalized);
+  if (error) {
+    console.error("Woo incomplete lookup failed:", error);
+    return 0;
+  }
+  const ids = (data ?? []).map((row: { id: string }) => row.id);
+  if (ids.length === 0) return 0;
+  await admin.from("order_items").delete().in("order_id", ids);
+  const { error: deleteErr } = await admin.from("orders").delete().in("id", ids);
+  if (deleteErr) {
+    console.error("Woo incomplete cleanup failed:", deleteErr);
+    return 0;
+  }
+  return ids.length;
+}
+
 async function fetchWooProduct(siteUrl: string, ck: string, cs: string, productId: number): Promise<WooProduct | null> {
   const auth = Buffer.from(`${ck}:${cs}`).toString("base64");
   const url = `${siteUrl.replace(/\/+$/, "")}/wp-json/wc/v3/products/${productId}`;
@@ -464,7 +496,7 @@ export const Route = createFileRoute("/api/public/webhooks/woocommerce")({
         const orderId = (row as { order_id: string }).order_id;
         const action = (row as { action: "created" | "updated" }).action;
         const itemRows = itemsJson;
-        let removedItems = 0;
+        const removedItems = await deleteObsoleteIncompleteOrders(sourceSiteId, customerPhone);
 
         // Push status back to WooCommerce as "on-hold" so the merchant can
         // confirm in the Woo admin that the order has been pulled into the
@@ -505,7 +537,7 @@ export const Route = createFileRoute("/api/public/webhooks/woocommerce")({
           action,
           id: orderId,
           items: itemRows.length,
-          removed_items: removedItems,
+          removed_incomplete_orders: removedItems,
           skipped_unmatched: Math.max(0, payload.line_items.length - aggregated.size),
           woo_status_push: wooStatusPush,
         });

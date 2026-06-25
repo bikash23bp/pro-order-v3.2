@@ -100,6 +100,39 @@ function normalizePhone(raw: string | undefined | null): string | null {
   return tail.length === 11 ? tail : null;
 }
 
+async function hasPlacedWooOrderForPhone(
+  supabase: Sb,
+  siteId: string,
+  phoneNormalized: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("orders")
+    .select("id")
+    .eq("source", "woocommerce")
+    .eq("source_site_id", siteId)
+    .eq("phone_normalized", phoneNormalized)
+    .limit(1);
+  if (error) {
+    console.error("[wp-incomplete-sync placed-order lookup]", error.message);
+    return false;
+  }
+  return (data?.length ?? 0) > 0;
+}
+
+async function deleteIncompleteOrderIfPresent(
+  supabase: Sb,
+  orderId: string | undefined,
+): Promise<void> {
+  if (!orderId) return;
+  await supabase.from("order_items").delete().eq("order_id", orderId);
+  const { error } = await supabase
+    .from("orders")
+    .delete()
+    .eq("id", orderId)
+    .eq("source", "woocommerce_incomplete");
+  if (error) console.error("[wp-incomplete-sync obsolete incomplete delete]", error.message);
+}
+
 async function pluginGet(
   siteUrl: string,
   ck: string,
@@ -285,27 +318,15 @@ export async function importWpIncompleteRows(
       continue;
     }
 
-    // If a real Woo order already exists for this phone (placed in the same
-    // session after the abandoned cart), skip importing the incomplete row.
-    if (!existingOrderId) {
-      const last10 = phone.replace(/\D/g, "").slice(-10);
-      if (last10.length >= 7) {
-        const { data: realOrders } = await supabase
-          .from("orders")
-          .select("id, customer_phone")
-          .eq("source", "woocommerce")
-          .eq("source_site_id", site.id)
-          .limit(2000);
-        const matched = (realOrders ?? []).some(
-          (r: { customer_phone: string | null }) =>
-            (r.customer_phone || "").replace(/\D/g, "").slice(-10) === last10,
-        );
-        if (matched) {
-          result.skipped_dup++;
-          result.imported_ids.push(row.id);
-          continue;
-        }
-      }
+    // If a real Woo order already exists for this shopper/site, the abandoned
+    // cart is obsolete. This runs even when the incomplete row was imported
+    // earlier, so a later checkout removes the old incomplete OMS order instead
+    // of updating/recreating it.
+    if (await hasPlacedWooOrderForPhone(supabase, site.id, phone)) {
+      await deleteIncompleteOrderIfPresent(supabase, existingOrderId);
+      result.skipped_dup++;
+      result.imported_ids.push(row.id);
+      continue;
     }
 
     const items = (row.items ?? []).map((it) => ({
