@@ -93,6 +93,8 @@ const PLUGIN_BASE = "/wp-json/oms/v1/incomplete-orders";
 const PLUGIN_BASE_V2 = "/wp-json/oms/v2/incomplete-orders";
 const PLUGIN_BATCH_SIZE = 200;
 const MAX_SYNC_BATCHES_PER_SITE = 25;
+const INCOMPLETE_MATCH_WINDOW_DAYS = 14;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function normalizePhone(raw: string | undefined | null): string | null {
   const digits = (raw || "").replace(/[^0-9]/g, "");
@@ -100,17 +102,29 @@ function normalizePhone(raw: string | undefined | null): string | null {
   return tail.length === 11 ? tail : null;
 }
 
-async function hasPlacedWooOrderForPhone(
+function parseDate(raw: string | undefined | null): Date | null {
+  if (!raw) return null;
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+async function hasPlacedWooOrderAfterIncomplete(
   supabase: Sb,
   siteId: string,
   phoneNormalized: string,
+  incompleteCreatedAt: string | undefined,
 ): Promise<boolean> {
+  const createdAt = parseDate(incompleteCreatedAt);
+  if (!createdAt) return false;
+  const expiresAt = new Date(createdAt.getTime() + INCOMPLETE_MATCH_WINDOW_DAYS * DAY_MS);
   const { data, error } = await supabase
     .from("orders")
     .select("id")
     .eq("source", "woocommerce")
     .eq("source_site_id", siteId)
     .eq("phone_normalized", phoneNormalized)
+    .gte("created_at", createdAt.toISOString())
+    .lte("created_at", expiresAt.toISOString())
     .limit(1);
   if (error) {
     console.error("[wp-incomplete-sync placed-order lookup]", error.message);
@@ -318,11 +332,10 @@ export async function importWpIncompleteRows(
       continue;
     }
 
-    // If a real Woo order already exists for this shopper/site, the abandoned
-    // cart is obsolete. This runs even when the incomplete row was imported
-    // earlier, so a later checkout removes the old incomplete OMS order instead
-    // of updating/recreating it.
-    if (await hasPlacedWooOrderForPhone(supabase, site.id, phone)) {
+    // If a real Woo order was placed after this incomplete row, the abandoned
+    // cart is obsolete. Older orders from the same phone must not block a new
+    // abandoned cart from being imported.
+    if (await hasPlacedWooOrderAfterIncomplete(supabase, site.id, phone, row.created_at)) {
       await deleteIncompleteOrderIfPresent(supabase, existingOrderId);
       result.skipped_dup++;
       result.imported_ids.push(row.id);

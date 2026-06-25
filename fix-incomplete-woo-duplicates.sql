@@ -2,11 +2,12 @@
 -- Fix existing Woo placed-order vs incomplete-order duplicates
 -- Safe to run on the audit project. It only deletes OMS rows that are still
 -- source='woocommerce_incomplete' and have a real source='woocommerce' order
--- from the same site with the same normalized phone.
+-- from the same site with the same normalized phone, created AFTER the
+-- incomplete row within the same 14-day checkout window.
 -- =============================================================
 
 CREATE INDEX IF NOT EXISTS idx_orders_woo_site_phone_source_status
-  ON public.orders (source_site_id, phone_normalized, source, status)
+  ON public.orders (source_site_id, phone_normalized, source, status, created_at)
   WHERE phone_normalized IS NOT NULL;
 
 WITH obsolete AS (
@@ -21,6 +22,8 @@ WITH obsolete AS (
       WHERE r.source = 'woocommerce'
         AND r.source_site_id = i.source_site_id
         AND r.phone_normalized = i.phone_normalized
+        AND r.created_at >= i.created_at
+        AND r.created_at <= i.created_at + interval '14 days'
     )
 ), deleted_items AS (
   DELETE FROM public.order_items oi

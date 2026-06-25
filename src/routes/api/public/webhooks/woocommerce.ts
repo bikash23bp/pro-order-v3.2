@@ -22,6 +22,8 @@ type WooOrder = {
   total: string;
   discount_total: string;
   shipping_total: string;
+  date_created?: string;
+  date_created_gmt?: string;
   customer_note?: string;
   billing: {
     first_name?: string;
@@ -142,9 +144,25 @@ function normalizePhone(raw: string | undefined | null): string | null {
   return tail.length === 11 ? tail : null;
 }
 
-async function deleteObsoleteIncompleteOrders(sourceSiteId: string, customerPhone: string): Promise<number> {
+const INCOMPLETE_MATCH_WINDOW_DAYS = 14;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function parseDate(raw: string | undefined | null): Date | null {
+  if (!raw) return null;
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+async function deleteObsoleteIncompleteOrders(
+  sourceSiteId: string,
+  customerPhone: string,
+  placedAtRaw: string | undefined | null,
+): Promise<number> {
   const phoneNormalized = normalizePhone(customerPhone);
   if (!phoneNormalized) return 0;
+  const placedAt = parseDate(placedAtRaw);
+  if (!placedAt) return 0;
+  const oldestIncompleteAt = new Date(placedAt.getTime() - INCOMPLETE_MATCH_WINDOW_DAYS * DAY_MS);
   const admin = await getAdmin();
   const { data, error } = await admin
     .from("orders")
@@ -152,7 +170,9 @@ async function deleteObsoleteIncompleteOrders(sourceSiteId: string, customerPhon
     .eq("source", "woocommerce_incomplete")
     .eq("source_site_id", sourceSiteId)
     .eq("status", "incomplete")
-    .eq("phone_normalized", phoneNormalized);
+    .eq("phone_normalized", phoneNormalized)
+    .gte("created_at", oldestIncompleteAt.toISOString())
+    .lte("created_at", placedAt.toISOString());
   if (error) {
     console.error("Woo incomplete lookup failed:", error);
     return 0;
@@ -289,6 +309,7 @@ export const Route = createFileRoute("/api/public/webhooks/woocommerce")({
         const discount = Number(payload.discount_total || 0);
         const delivery = Number(payload.shipping_total || 0);
         const status = mapStatus(payload.status);
+        const wooCreatedAt = payload.date_created ?? payload.date_created_gmt ?? null;
 
         // Match WC line items to local products: external Woo ID map → SKU → fallback SKU → name.
         const sitePrefix = `woo-${sourceSiteId.slice(0, 8)}-`;
@@ -496,7 +517,14 @@ export const Route = createFileRoute("/api/public/webhooks/woocommerce")({
         const orderId = (row as { order_id: string }).order_id;
         const action = (row as { action: "created" | "updated" }).action;
         const itemRows = itemsJson;
-        const removedItems = await deleteObsoleteIncompleteOrders(sourceSiteId, customerPhone);
+        const parsedWooCreatedAt = parseDate(wooCreatedAt);
+        if (action === "created" && parsedWooCreatedAt) {
+          await (await getAdmin())
+            .from("orders")
+            .update({ created_at: parsedWooCreatedAt.toISOString() })
+            .eq("id", orderId);
+        }
+        const removedItems = await deleteObsoleteIncompleteOrders(sourceSiteId, customerPhone, wooCreatedAt);
 
         // Push status back to WooCommerce as "on-hold" so the merchant can
         // confirm in the Woo admin that the order has been pulled into the
