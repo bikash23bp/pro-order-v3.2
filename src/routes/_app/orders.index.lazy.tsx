@@ -882,8 +882,11 @@ function OrdersPage() {
     if (n >= 100000) return `${(n / 1000).toFixed(0)}k`;
     return Math.round(n).toLocaleString("en-IN");
   };
+  // Only mark counts as unavailable when we have *no* prior data to show.
+  // With placeholderData: keepPreviousData, a refetch error still leaves
+  // countsQuery.data populated with the last successful counts.
   const countsPriming = !tabCountsData && !countsQuery.isError && (ordersQuery.isPending || countsQuery.isPending || countsQuery.isFetching || !countsQuery.data);
-  const countsUnavailable = countsQuery.isError || (!countsPriming && !tabCountsData);
+  const countsUnavailable = !tabCountsData && (countsQuery.isError || (!countsPriming && !countsQuery.data));
   const tabCountFor = (key: string) => tabCounts[key] ?? 0;
   const tabCountUnavailableFor = (key: string) => countsUnavailable && key !== effectiveStatusFilter;
   const fmtTabAmount = (key: string) => countsUnavailable ? "৳ —" : `৳ ${fmtAmount(tabAmounts[key] ?? 0)}`;
