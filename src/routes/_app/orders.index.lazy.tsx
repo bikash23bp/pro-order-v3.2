@@ -1445,7 +1445,7 @@ function OrdersPage() {
                     <span className="text-[10px] font-medium truncate w-full text-center">{activeTab?.label ?? "Select"}</span>
                     {activeTab && (
                       <>
-                        <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} target={tabCounts[activeTab.key] ?? 0} unavailable={countsUnavailable} /></span>
+                        <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming && activeTab.key !== effectiveStatusFilter} target={tabCountFor(activeTab.key)} unavailable={tabCountUnavailableFor(activeTab.key)} /></span>
                         <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(activeTab.key)}</span>
                       </>
                     )}
@@ -1514,7 +1514,7 @@ function OrdersPage() {
                     aria-pressed={active}
                   >
                     <span className="text-[10px] font-medium truncate w-full text-center leading-tight">{tab.label}</span>
-                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} target={tabCounts[tab.key] ?? 0} unavailable={countsUnavailable} /></span>
+                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming && tab.key !== effectiveStatusFilter} target={tabCountFor(tab.key)} unavailable={tabCountUnavailableFor(tab.key)} /></span>
                     <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(tab.key)}</span>
                   </button>
                 );
@@ -1539,7 +1539,7 @@ function OrdersPage() {
                     aria-pressed={active}
                   >
                     <span className="text-[10px] font-semibold truncate w-full text-center leading-tight">{tab.label}</span>
-                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} target={tabCounts[tab.key] ?? 0} unavailable={countsUnavailable} /></span>
+                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming && tab.key !== effectiveStatusFilter} target={tabCountFor(tab.key)} unavailable={tabCountUnavailableFor(tab.key)} /></span>
                     <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(tab.key)}</span>
                   </button>
                 );
