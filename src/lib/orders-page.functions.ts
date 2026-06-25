@@ -431,8 +431,15 @@ export const getOrderCountsPage = createServerFn({ method: "POST" })
       p_allowed_oms: omsAllowed ?? null,
     };
     const { data: tabCountsData, error } = await (context.supabase as any).rpc("get_order_tab_counts_v2", countArgs);
-    if (isStatementTimeout(error)) return { tabCountsData: emptyTabCountsData(), preorderDueCount: 0, timedOut: true };
-    if (error) return { tabCountsData: emptyTabCountsData(), preorderDueCount: 0, error: error.message };
+    // IMPORTANT: do NOT silently return zero counts on error. Throwing keeps the
+    // previous successful counts visible (via React Query's keepPreviousData) and
+    // surfaces the failure so the UI can auto-retry instead of showing 0.
+    if (isStatementTimeout(error)) {
+      const err = new Error("Counts query timed out");
+      (err as any).code = "TAB_COUNTS_TIMEOUT";
+      throw err;
+    }
+    if (error) throw new Error(error.message);
     const today = new Date().toISOString().slice(0, 10);
     const { count, error: dueError } = await context.supabase.from("orders").select("id", { count: "exact", head: true }).eq("preorder", true).not("preorder_date", "is", null).lte("preorder_date", today);
     const preorderDueCount = dueError && isStatementTimeout(dueError) ? 0 : (count ?? 0);
