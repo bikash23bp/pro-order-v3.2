@@ -1,7 +1,7 @@
 import { createLazyFileRoute, Link, useSearch, useNavigate } from "@tanstack/react-router";
 import { MemberBadge } from "@/components/MemberBadge";
 import { useEffect, useMemo, useRef, useState, useCallback, Fragment, lazy, Suspense } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Plus, Search, Eye, Trash2, FileText, RefreshCw, Pencil, Printer, Send, Crown, Loader2, Truck, Download, Phone, Upload, StickyNote, UserPlus, ChevronDown, ChevronUp } from "lucide-react";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -740,8 +740,11 @@ function OrdersPage() {
     gcTime: ORDER_LIST_GC_MS,
     refetchOnWindowFocus: true,
     refetchOnMount: "always",
-    retry: 1,
+    retry: 2,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+    // Keep the last good counts visible during a refetch / transient failure
+    // instead of flashing back to 0 on timeout.
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       return await getOrderCounts({ data: {
         source: sourceFilter, site: siteFilter, courier: courierFilter,
