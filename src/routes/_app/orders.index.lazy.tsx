@@ -1,7 +1,7 @@
 import { createLazyFileRoute, Link, useSearch, useNavigate } from "@tanstack/react-router";
 import { MemberBadge } from "@/components/MemberBadge";
 import { useEffect, useMemo, useRef, useState, useCallback, Fragment, lazy, Suspense } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Plus, Search, Eye, Trash2, FileText, RefreshCw, Pencil, Printer, Send, Crown, Loader2, Truck, Download, Phone, Upload, StickyNote, UserPlus, ChevronDown, ChevronUp } from "lucide-react";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -740,8 +740,11 @@ function OrdersPage() {
     gcTime: ORDER_LIST_GC_MS,
     refetchOnWindowFocus: true,
     refetchOnMount: "always",
-    retry: 1,
+    retry: 2,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+    // Keep the last good counts visible during a refetch / transient failure
+    // instead of flashing back to 0 on timeout.
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       return await getOrderCounts({ data: {
         source: sourceFilter, site: siteFilter, courier: courierFilter,
@@ -757,6 +760,17 @@ function OrdersPage() {
 
   const tabCountsData = countsQuery.data?.tabCountsData ?? null;
   const preorderDueCount = countsQuery.data?.preorderDueCount ?? 0;
+
+  // Auto-retry when the tab-counts RPC errors / times out. With
+  // placeholderData: keepPreviousData the previous good counts stay
+  // visible while we silently retry in the background — no 0-flicker.
+  useEffect(() => {
+    if (!countsQuery.isError) return;
+    const t = setTimeout(() => {
+      void countsQuery.refetch();
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [countsQuery.isError, countsQuery]);
 
   // Unified refetcher used by mutations + manual refresh buttons.
   const refetchAll = useCallback(async (showToast = false, clearSelection = true) => {
@@ -879,8 +893,11 @@ function OrdersPage() {
     if (n >= 100000) return `${(n / 1000).toFixed(0)}k`;
     return Math.round(n).toLocaleString("en-IN");
   };
+  // Only mark counts as unavailable when we have *no* prior data to show.
+  // With placeholderData: keepPreviousData, a refetch error still leaves
+  // countsQuery.data populated with the last successful counts.
   const countsPriming = !tabCountsData && !countsQuery.isError && (ordersQuery.isPending || countsQuery.isPending || countsQuery.isFetching || !countsQuery.data);
-  const countsUnavailable = countsQuery.isError || (!countsPriming && !tabCountsData);
+  const countsUnavailable = !tabCountsData && (countsQuery.isError || (!countsPriming && !countsQuery.data));
   const tabCountFor = (key: string) => tabCounts[key] ?? 0;
   const tabCountUnavailableFor = (key: string) => countsUnavailable && key !== effectiveStatusFilter;
   const fmtTabAmount = (key: string) => countsUnavailable ? "৳ —" : `৳ ${fmtAmount(tabAmounts[key] ?? 0)}`;
