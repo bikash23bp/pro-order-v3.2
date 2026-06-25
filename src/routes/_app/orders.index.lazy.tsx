@@ -761,6 +761,17 @@ function OrdersPage() {
   const tabCountsData = countsQuery.data?.tabCountsData ?? null;
   const preorderDueCount = countsQuery.data?.preorderDueCount ?? 0;
 
+  // Auto-retry when the tab-counts RPC errors / times out. With
+  // placeholderData: keepPreviousData the previous good counts stay
+  // visible while we silently retry in the background — no 0-flicker.
+  useEffect(() => {
+    if (!countsQuery.isError) return;
+    const t = setTimeout(() => {
+      void countsQuery.refetch();
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [countsQuery.isError, countsQuery]);
+
   // Unified refetcher used by mutations + manual refresh buttons.
   const refetchAll = useCallback(async (showToast = false, clearSelection = true) => {
     await Promise.all([
