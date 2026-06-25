@@ -3,7 +3,7 @@
 -- Safe to run on the audit project. It only deletes OMS rows that are still
 -- source='woocommerce_incomplete' and have a real source='woocommerce' order
 -- from the same site with the same normalized phone, created AFTER the
--- incomplete row within the same 14-day checkout window.
+-- incomplete row within the same 12-hour checkout window.
 -- =============================================================
 
 CREATE INDEX IF NOT EXISTS idx_orders_woo_site_phone_source_status
@@ -23,7 +23,7 @@ WITH obsolete AS (
         AND r.source_site_id = i.source_site_id
         AND r.phone_normalized = i.phone_normalized
         AND r.created_at >= i.created_at
-        AND r.created_at <= i.created_at + interval '14 days'
+        AND r.created_at <= i.created_at + interval '12 hours'
     )
 ), deleted_items AS (
   DELETE FROM public.order_items oi

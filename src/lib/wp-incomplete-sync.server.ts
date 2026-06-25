@@ -93,8 +93,8 @@ const PLUGIN_BASE = "/wp-json/oms/v1/incomplete-orders";
 const PLUGIN_BASE_V2 = "/wp-json/oms/v2/incomplete-orders";
 const PLUGIN_BATCH_SIZE = 200;
 const MAX_SYNC_BATCHES_PER_SITE = 25;
-const INCOMPLETE_MATCH_WINDOW_DAYS = 14;
-const DAY_MS = 24 * 60 * 60 * 1000;
+const INCOMPLETE_MATCH_WINDOW_HOURS = 12;
+const HOUR_MS = 60 * 60 * 1000;
 
 function normalizePhone(raw: string | undefined | null): string | null {
   const digits = (raw || "").replace(/[^0-9]/g, "");
@@ -116,7 +116,7 @@ async function hasPlacedWooOrderAfterIncomplete(
 ): Promise<boolean> {
   const createdAt = parseDate(incompleteCreatedAt);
   if (!createdAt) return false;
-  const expiresAt = new Date(createdAt.getTime() + INCOMPLETE_MATCH_WINDOW_DAYS * DAY_MS);
+  const expiresAt = new Date(createdAt.getTime() + INCOMPLETE_MATCH_WINDOW_HOURS * HOUR_MS);
   const { data, error } = await supabase
     .from("orders")
     .select("id")
