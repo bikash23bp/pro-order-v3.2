@@ -644,10 +644,10 @@ function OrdersPage() {
         : window.setTimeout(cb, 250);
     const warmTimers: number[] = [];
     idle(() => {
-      const warmKeys = ["pending", "ready_order", "processing", "ready_to_ship", "shipped", "no_response", "hold"]
+      const warmKeys = ["pending", "processing", "ready_to_ship"]
         .filter((k) => k !== effectiveStatusFilter);
       warmKeys.forEach((k, index) => {
-        warmTimers.push(window.setTimeout(() => prefetchOrderTab(k), 900 * (index + 1)));
+        warmTimers.push(window.setTimeout(() => prefetchOrderTab(k), 2000 * (index + 1)));
       });
     });
     return () => warmTimers.forEach((t) => window.clearTimeout(t));
