@@ -1,7 +1,7 @@
 import { createLazyFileRoute, Link, useSearch, useNavigate } from "@tanstack/react-router";
 import { MemberBadge } from "@/components/MemberBadge";
 import { useEffect, useMemo, useRef, useState, useCallback, Fragment, lazy, Suspense } from "react";
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Plus, Search, Eye, Trash2, FileText, RefreshCw, Pencil, Printer, Send, Crown, Loader2, Truck, Download, Phone, Upload, StickyNote, UserPlus, ChevronDown, ChevronUp } from "lucide-react";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -168,41 +168,9 @@ type TabDef = {
 };
 
 function TickingNumber({ priming, target, unavailable }: { priming: boolean; target: number; unavailable: boolean }) {
-  const [n, setN] = useState(0);
-
-  useEffect(() => {
-    if (unavailable) return;
-
-    if (priming) {
-      // Target এখনো জানা নাই — overshoot এড়াতে কিছু animate করবো না।
-      return;
-    }
-
-    const id = window.setInterval(() => {
-      setN((prev) => {
-        // target পরিবর্তিত হলে কখনো overshoot দেখাবো না — সরাসরি target-এ snap।
-        if (prev > target) {
-          window.clearInterval(id);
-          return target;
-        }
-        const current = prev;
-        const remaining = target - current;
-        if (remaining <= 0) {
-          window.clearInterval(id);
-          return target;
-        }
-        const maxStep = Math.max(1, Math.ceil(remaining / 8));
-        const step = Math.min(remaining, Math.floor(Math.random() * maxStep) + 1);
-        return current + step;
-      });
-    }, 55 + Math.floor(Math.random() * 45));
-
-    return () => window.clearInterval(id);
-  }, [priming, target, unavailable]);
-
   if (unavailable) return <>—</>;
   if (priming) return <>…</>;
-  return <>{n.toLocaleString("en-IN")}</>;
+  return <>{target.toLocaleString("en-IN")}</>;
 }
 
 const PRIMARY_TABS: TabDef[] = [
@@ -236,13 +204,11 @@ const TAB_STATUSES: TabDef[] = [
   ...PIPELINE_TABS,
 ];
 
-// Aggressive client cache: switching between tabs/pages within this window
-// reuses cached rows instantly with zero network round-trips. Mutations and
-// realtime events still invalidate the cache, so freshness isn't sacrificed.
-// Long-lived cache: একবার লোড হলে অনেকক্ষণ memory-তে থাকে যাতে বার বার
-// orders পেইজে গেলে আর reload না লাগে। Mutations + realtime থেকে
-// invalidate হলে স্বয়ংক্রিয়ভাবে refresh হবে।
-const ORDER_LIST_STALE_MS = 5 * 60 * 60_000;   // 5 hours fresh — পেইজে ফিরে এলে reload হবে না
+// Keep cached rows in memory/localStorage for fast paint, but always treat them
+// as stale so Orders + tab counters refetch together in the background. This
+// avoids the old mismatch where a tab showed one status while cards still came
+// from a previous cached tab.
+const ORDER_LIST_STALE_MS = 0;
 const ORDER_LIST_GC_MS = 24 * 60 * 60_000;     // 24 hour cache retention
 const transientOrderLoadRetry = (failureCount: number, error: unknown) => {
   const message = error instanceof Error ? error.message : String(error ?? "");
@@ -587,11 +553,8 @@ function OrdersPage() {
     enabled: !!session && (!search.dup || dupePhonesReady),
     staleTime: ORDER_LIST_STALE_MS,
     gcTime: ORDER_LIST_GC_MS,
-    refetchOnWindowFocus: false,
-    // Fresh cache paints instantly when returning to the page. If another page
-    // marked the orders cache changed, React Query refetches in the background.
-    refetchOnMount: true,
-    placeholderData: keepPreviousData,
+    refetchOnWindowFocus: true,
+    refetchOnMount: "always",
     retry: transientOrderLoadRetry,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
     queryFn: async () => {
@@ -764,9 +727,8 @@ function OrdersPage() {
     enabled: !!session && (!search.dup || dupePhonesReady) && !ordersQuery.isPending,
     staleTime: ORDER_LIST_STALE_MS,
     gcTime: ORDER_LIST_GC_MS,
-    refetchOnWindowFocus: false,
-    refetchOnMount: true,
-    placeholderData: keepPreviousData,
+    refetchOnWindowFocus: true,
+    refetchOnMount: "always",
     retry: false,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
     queryFn: async () => {
@@ -788,8 +750,8 @@ function OrdersPage() {
   // Unified refetcher used by mutations + manual refresh buttons.
   const refetchAll = useCallback(async (showToast = false, clearSelection = true) => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["orders", "list"] }),
-      queryClient.invalidateQueries({ queryKey: ["orders", "counts"] }),
+      queryClient.invalidateQueries({ queryKey: ["orders", "list"], refetchType: "active" }),
+      queryClient.invalidateQueries({ queryKey: ["orders", "counts"], refetchType: "active" }),
     ]);
     // Selection may reference rows that were deleted/edited by another user; clear it
     // so subsequent bulk actions operate only on visible rows.
@@ -809,53 +771,19 @@ function OrdersPage() {
     setSelected(new Set());
   }, [statusFilter, page, sourceFilter, siteFilter, courierFilter, datePreset, debouncedQ, tagFilter, advanceOnly]);
 
-  // Realtime — keep high-volume order imports from causing constant refetch loops.
+  // Realtime — list and tab counters are refreshed together immediately so the
+  // selected tab never drifts away from the visible order cards.
   useEffect(() => {
     if (!session) return;
-    let insertTimer: ReturnType<typeof setTimeout> | null = null;
-    let countsTimer: ReturnType<typeof setTimeout> | null = null;
-    const scheduleCountsRefresh = () => {
-      if (countsTimer) clearTimeout(countsTimer);
-      countsTimer = setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ["orders", "counts"] });
-      }, 1500);
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const refreshOrdersNow = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => { void refetchAll(false, false); }, 100);
     };
     const channel = supabase
       .channel("orders-list-sync")
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
-        if (payload.eventType === "UPDATE") {
-          // Patch the changed row in every cached orders list — no refetch.
-          const updated = payload.new as Partial<Order> & { id: string };
-          queryClient.setQueriesData({ queryKey: ["orders", "list"] }, (prev: any) => {
-            if (!prev || !Array.isArray(prev.rows)) return prev;
-            let touched = false;
-            const rows = prev.rows.map((r: Order) => {
-              if (r.id !== updated.id) return r;
-              touched = true;
-              return { ...r, ...updated };
-            });
-            return touched ? { ...prev, rows } : prev;
-          });
-          scheduleCountsRefresh();
-          if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("orders:changed"));
-          return;
-        }
-        if (payload.eventType === "DELETE") {
-          const removed = payload.old as { id?: string };
-          if (removed?.id) {
-            queryClient.setQueriesData({ queryKey: ["orders", "list"] }, (prev: any) => {
-              if (!prev || !Array.isArray(prev.rows)) return prev;
-              const rows = prev.rows.filter((r: Order) => r.id !== removed.id);
-              if (rows.length === prev.rows.length) return prev;
-              return { ...prev, rows, totalCount: Math.max(0, (prev.totalCount ?? rows.length) - 1) };
-            });
-          }
-          scheduleCountsRefresh();
-          if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("orders:changed"));
-          return;
-        }
-        // INSERT
-        {
+        if (payload.eventType === "INSERT") {
           const order = payload.new as { order_number?: number; source?: string };
           toast.success(
             order.source === "woocommerce"
@@ -863,16 +791,15 @@ function OrdersPage() {
               : `Order #${order.order_number ?? ""} created`,
           );
         }
-        if (insertTimer) clearTimeout(insertTimer);
-        insertTimer = setTimeout(() => { void refetchAll(false, false); }, 4000);
+        refreshOrdersNow();
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, refreshOrdersNow)
       .subscribe();
     return () => {
-      if (insertTimer) clearTimeout(insertTimer);
-      if (countsTimer) clearTimeout(countsTimer);
+      if (refreshTimer) clearTimeout(refreshTimer);
       supabase.removeChannel(channel);
     };
-  }, [session, refetchAll, queryClient]);
+  }, [session, refetchAll]);
 
 
   const matchesTab = (r: Order, tab: string) => {
@@ -943,6 +870,12 @@ function OrdersPage() {
   };
   const countsPriming = !tabCountsData && !countsQuery.isError && (ordersQuery.isPending || countsQuery.isPending || countsQuery.isFetching || !countsQuery.data);
   const countsUnavailable = countsQuery.isError || (!countsPriming && !tabCountsData);
+  const tabCountFor = (key: string) => (
+    !tabCountsData && key === effectiveStatusFilter && !ordersQuery.isPending
+      ? totalCount
+      : tabCounts[key] ?? 0
+  );
+  const tabCountUnavailableFor = (key: string) => countsUnavailable && key !== effectiveStatusFilter;
   const fmtTabAmount = (key: string) => countsUnavailable ? "৳ —" : `৳ ${fmtAmount(tabAmounts[key] ?? 0)}`;
 
   const todayISO = useMemo(() => {
@@ -1513,7 +1446,7 @@ function OrdersPage() {
                     <span className="text-[10px] font-medium truncate w-full text-center">{activeTab?.label ?? "Select"}</span>
                     {activeTab && (
                       <>
-                        <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} target={tabCounts[activeTab.key] ?? 0} unavailable={countsUnavailable} /></span>
+                        <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming && activeTab.key !== effectiveStatusFilter} target={tabCountFor(activeTab.key)} unavailable={tabCountUnavailableFor(activeTab.key)} /></span>
                         <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(activeTab.key)}</span>
                       </>
                     )}
@@ -1582,7 +1515,7 @@ function OrdersPage() {
                     aria-pressed={active}
                   >
                     <span className="text-[10px] font-medium truncate w-full text-center leading-tight">{tab.label}</span>
-                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} target={tabCounts[tab.key] ?? 0} unavailable={countsUnavailable} /></span>
+                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming && tab.key !== effectiveStatusFilter} target={tabCountFor(tab.key)} unavailable={tabCountUnavailableFor(tab.key)} /></span>
                     <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(tab.key)}</span>
                   </button>
                 );
@@ -1607,7 +1540,7 @@ function OrdersPage() {
                     aria-pressed={active}
                   >
                     <span className="text-[10px] font-semibold truncate w-full text-center leading-tight">{tab.label}</span>
-                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming} target={tabCounts[tab.key] ?? 0} unavailable={countsUnavailable} /></span>
+                    <span className="text-sm font-bold tabular-nums leading-tight"><TickingNumber priming={countsPriming && tab.key !== effectiveStatusFilter} target={tabCountFor(tab.key)} unavailable={tabCountUnavailableFor(tab.key)} /></span>
                     <span className="text-[10px] font-semibold tabular-nums leading-tight">{fmtTabAmount(tab.key)}</span>
                   </button>
                 );
@@ -1773,8 +1706,6 @@ function OrdersPage() {
                 {ordersQuery.isFetching ? "Retrying…" : "Retry"}
               </Button>
             </div>
-          ) : totalCount === 0 && countsPriming ? (
-            <div className="p-12 text-center text-muted-foreground">Loading orders…</div>
           ) : totalCount === 0 ? (
             <div className="p-12 text-center text-muted-foreground">No orders found.</div>
           ) : (

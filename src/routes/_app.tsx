@@ -78,23 +78,20 @@ function AppLayout() {
   }, [session]);
 
   // Keep the orders cache aware of changes while the user is on other pages.
-  // Returning to Orders then shows cached rows immediately and syncs in-place.
+  // Mark it stale immediately so returning to Orders paints cached rows first,
+  // then refreshes list + counters together without a delayed mismatch.
   useEffect(() => {
     if (!session || path === "/orders" || path === "/orders/") return;
-    let timer: number | null = null;
     const markOrdersChanged = () => {
-      if (timer) window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ["orders"], refetchType: "none" });
-        window.dispatchEvent(new CustomEvent("orders:changed"));
-      }, 4000);
+      queryClient.invalidateQueries({ queryKey: ["orders"], refetchType: "none" });
+      window.dispatchEvent(new CustomEvent("orders:changed"));
     };
     const channel = supabase
       .channel("orders-cache-sync-away")
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, markOrdersChanged)
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, markOrdersChanged)
       .subscribe();
     return () => {
-      if (timer) window.clearTimeout(timer);
       supabase.removeChannel(channel);
     };
   }, [session, path, queryClient]);
