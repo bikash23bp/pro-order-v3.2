@@ -122,6 +122,12 @@ function isMissingReviewTableError(error: unknown): boolean {
 }
 
 async function getAllowedOmsSenders(ctx: { supabase: any; userId: string }): Promise<string[] | null> {
+  // Try to get role from JWT first (zero DB round-trips for admins)
+  const { data: { user } } = await ctx.supabase.auth.getUser();
+  const jwtRole = (user?.app_metadata?.role ?? user?.user_metadata?.role ?? "") as string;
+  if (jwtRole === "admin" || jwtRole === "business_owner") return null;
+
+  // Non-admin: check DB role + permissions + oms access in parallel
   const [rolesRes, profileRes, accessRes] = await Promise.all([
     ctx.supabase
       .from("user_roles")
@@ -132,11 +138,9 @@ async function getAllowedOmsSenders(ctx: { supabase: any; userId: string }): Pro
     (ctx.supabase as any).from("user_oms_access").select("sender_name").eq("user_id", ctx.userId),
   ]);
   const roles = new Set(((rolesRes.data ?? []) as { role: string }[]).map((r) => r.role));
-  let value: string[] | null;
-  if (roles.has("admin") || roles.has("business_owner")) value = null;
-  else if ((profileRes.data?.permissions as any)?.can_view_all_orders) value = null;
-  else value = ((accessRes.data ?? []) as { sender_name: string }[]).map((r) => r.sender_name);
-  return value;
+  if (roles.has("admin") || roles.has("business_owner")) return null;
+  if ((profileRes.data?.permissions as any)?.can_view_all_orders) return null;
+  return ((accessRes.data ?? []) as { sender_name: string }[]).map((r) => r.sender_name);
 }
 
 function applyOmsAccessFilter(qb: any, allowed: string[] | null) {
