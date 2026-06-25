@@ -89,6 +89,7 @@ function AppLayout() {
     const channel = supabase
       .channel("orders-cache-sync-away")
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, markOrdersChanged)
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, markOrdersChanged)
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
