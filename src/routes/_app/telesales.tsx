@@ -119,7 +119,7 @@ function TelesalesPage() {
     assignedFilter === "all" ? undefined :
     assignedFilter === "unassigned" ? null : assignedFilter;
 
-  const listKey = ["telesales-list", tab, assignedFilter] as const;
+  const listKey = ["telesales-list", tab, assignedFilter, page, pageSize, search.trim()] as const;
   const listQ = useQuery({
     queryKey: listKey,
     queryFn: async () => {
@@ -131,7 +131,9 @@ function TelesalesPage() {
         action: isAction ? (tab as ActionKey) : undefined,
         orderTab: isOrder || undefined,
         assignedTo: assignedToFilter,
-        limit: 500,
+        page,
+        limit: pageSize,
+        search: search.trim() || undefined,
       } });
     },
     staleTime: 30_000,
@@ -168,7 +170,8 @@ function TelesalesPage() {
     gcTime: 30 * 60_000,
   });
 
-  const rows = listQ.data ?? [];
+  const rows = listQ.data?.rows ?? [];
+  const rowsTotal = listQ.data?.total ?? 0;
   const loading = listQ.isLoading;
   const counts = countsQ.data ?? {
     all: 0, order: 0,
@@ -186,7 +189,10 @@ function TelesalesPage() {
     qc.invalidateQueries({ queryKey: ["telesales-counts"] });
   };
   const setRows = (updater: (prev: TeleAssignment[]) => TeleAssignment[]) => {
-    qc.setQueryData<TeleAssignment[]>(listKey, (prev) => updater(prev ?? []));
+    qc.setQueryData<{ rows: TeleAssignment[]; total: number }>(listKey, (prev) => ({
+      rows: updater(prev?.rows ?? []),
+      total: prev?.total ?? rowsTotal,
+    }));
   };
 
 
@@ -222,23 +228,12 @@ function TelesalesPage() {
     } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
   };
 
-  const visible = useMemo(() => {
-    if (!search.trim()) return rows;
-    const s = search.toLowerCase();
-    return rows.filter((r) =>
-      (r.name ?? "").toLowerCase().includes(s) ||
-      r.phone.toLowerCase().includes(s) ||
-      (r.address ?? "").toLowerCase().includes(s),
-    );
-  }, [rows, search]);
+  const visible = rows;
 
-  const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(rowsTotal / pageSize));
   useEffect(() => { if (page > totalPages) setPage(1); }, [totalPages, page]);
   useEffect(() => { setPage(1); }, [tab, assignedFilter, search, pageSize]);
-  const paged = useMemo(
-    () => visible.slice((page - 1) * pageSize, page * pageSize),
-    [visible, page, pageSize],
-  );
+  const paged = visible;
 
   const allSelected = paged.length > 0 && paged.every((r) => selected.has(r.id));
   const toggleAll = () => {
@@ -383,7 +378,7 @@ function TelesalesPage() {
             <div className="p-3 sm:p-4">
               <div className="flex items-center gap-2 px-1 pb-2 text-xs text-muted-foreground">
                 <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
-                <span>Select page ({paged.length}) · {visible.length} total</span>
+                <span>Select page ({paged.length}) · {rowsTotal.toLocaleString("en-IN")} total</span>
                 <span className="ml-auto">Layout: <span className="font-medium text-foreground">{activeTemplate.name}</span></span>
               </div>
               <div className={isMobile ? "space-y-2 overflow-x-hidden" : (activeTemplate.id === "tele-table-classic" ? "rounded-md border overflow-hidden" : "space-y-2")}>
@@ -425,6 +420,7 @@ function TelesalesPage() {
                           complaint_count: r.complaint_count,
                           order_id: r.order_id,
                           duplicate_count: r.duplicate_count,
+                          review_summary: r.review_summary,
                         },
                         isSelected: selected.has(r.id),
                         staff,
@@ -437,7 +433,7 @@ function TelesalesPage() {
               <PaginationFooter
                 page={page}
                 pageSize={pageSize}
-                total={visible.length}
+                total={rowsTotal}
                 totalPages={totalPages}
                 onPageChange={setPage}
                 onPageSizeChange={setPageSize}
