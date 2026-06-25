@@ -112,6 +112,15 @@ function isMissingForwardedColumn(error: { message?: string | null; details?: st
   return /42703|PGRST204|forwarded_to_partner_at|schema cache/i.test(text);
 }
 
+function isMissingReviewTableError(error: unknown): boolean {
+  const e = error as { code?: string; message?: string } | null | undefined;
+  const message = (e?.message ?? "").toLowerCase();
+  return e?.code === "PGRST205"
+    || (message.includes("customer_reviews") && message.includes("schema cache"))
+    || message.includes('relation "public.customer_reviews" does not exist')
+    || message.includes('relation "customer_reviews" does not exist');
+}
+
 async function getAllowedOmsSenders(ctx: { supabase: any; userId: string }): Promise<string[] | null> {
   const [rolesRes, profileRes, accessRes] = await Promise.all([
     ctx.supabase
@@ -271,13 +280,14 @@ async function fetchOrdersPageWithoutCount(
 
 async function enrichOrdersForList(context: any, orders: any[]) {
   const orderIds = orders.map((o: any) => o.id).filter(Boolean) as string[];
+  const phones = Array.from(new Set(orders.map((o: any) => String(o.customer_phone ?? "").trim()).filter(Boolean))) as string[];
   const userIds = Array.from(new Set([
     ...orders.map((o: any) => o.created_by).filter(Boolean),
     ...orders.map((o: any) => o.updated_by).filter(Boolean),
   ]));
   const siteIds = Array.from(new Set(orders.map((o: any) => o.source_site_id).filter(Boolean))) as string[];
 
-  const [profileRes, siteRes, itemsRes] = await Promise.all([
+  const [profileRes, siteRes, itemsRes, reviewsByOrderRes, reviewsByPhoneRes] = await Promise.all([
     userIds.length
       ? context.supabase.from("profiles").select("id, full_name, email").in("id", userIds)
       : Promise.resolve({ data: [] }),
@@ -290,7 +300,16 @@ async function enrichOrdersForList(context: any, orders: any[]) {
             .select("order_id, quantity, unit_price, products(name, image_url), product_variants(attributes, image_url)")
           .in("order_id", orderIds)
       : Promise.resolve({ data: [] }),
+    orderIds.length
+      ? (context.supabase as any).from("customer_reviews").select("id, order_id, phone, rating").in("order_id", orderIds)
+      : Promise.resolve({ data: [], error: null }),
+    phones.length
+      ? (context.supabase as any).from("customer_reviews").select("id, order_id, phone, rating").in("phone", phones)
+      : Promise.resolve({ data: [], error: null }),
   ]);
+
+  if (reviewsByOrderRes.error && !isMissingReviewTableError(reviewsByOrderRes.error)) throw new Error(reviewsByOrderRes.error.message);
+  if (reviewsByPhoneRes.error && !isMissingReviewTableError(reviewsByPhoneRes.error)) throw new Error(reviewsByPhoneRes.error.message);
 
   const profileMap = Object.fromEntries((profileRes.data ?? []).map((p: any) => [
     p.id,
@@ -314,12 +333,40 @@ async function enrichOrdersForList(context: any, orders: any[]) {
     itemMap.set(key, list);
   }
 
+  const reviewRows = [
+    ...((reviewsByOrderRes.data ?? []) as Array<{ id: string; order_id: string | null; phone: string | null; rating: number }>),
+    ...((reviewsByPhoneRes.data ?? []) as Array<{ id: string; order_id: string | null; phone: string | null; rating: number }>),
+  ];
+  const reviewsByOrder = new Map<string, Map<string, number>>();
+  const reviewsByPhone = new Map<string, Map<string, number>>();
+  const addReview = (map: Map<string, Map<string, number>>, key: string | null | undefined, review: { id: string; rating: number }) => {
+    if (!key) return;
+    const bucket = map.get(key) ?? new Map<string, number>();
+    bucket.set(review.id, Number(review.rating));
+    map.set(key, bucket);
+  };
+  for (const review of reviewRows) {
+    addReview(reviewsByOrder, review.order_id, review);
+    addReview(reviewsByPhone, review.phone?.trim(), review);
+  }
+  const summaryForOrder = (order: any) => {
+    const ratings = new Map<string, number>();
+    for (const bucket of [reviewsByOrder.get(order.id), reviewsByPhone.get(String(order.customer_phone ?? "").trim())]) {
+      if (!bucket) continue;
+      for (const [id, rating] of bucket.entries()) ratings.set(id, rating);
+    }
+    if (ratings.size === 0) return null;
+    const sum = Array.from(ratings.values()).reduce((acc, rating) => acc + rating, 0);
+    return { count: ratings.size, avg: sum / ratings.size };
+  };
+
   return orders.map((o: any) => ({
     ...o,
     order_items: itemMap.get(o.id) ?? [],
     creator: o.created_by ? (profileMap[o.created_by] ?? null) : null,
     editor: o.updated_by ? (profileMap[o.updated_by] ?? null) : null,
     site_name: o.source_site_id ? (siteMap[o.source_site_id] ?? null) : null,
+    review_summary: summaryForOrder(o),
     // customer_flags is fetched separately by the client so the main list returns instantly.
     customer_flags: null,
   }));
