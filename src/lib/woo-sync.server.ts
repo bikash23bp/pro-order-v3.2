@@ -60,20 +60,35 @@ function normalizePhone(raw: string | undefined | null): string | null {
   return tail.length === 11 ? tail : null;
 }
 
+const INCOMPLETE_MATCH_WINDOW_DAYS = 14;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function parseDate(raw: string | undefined | null): Date | null {
+  if (!raw) return null;
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 async function deleteObsoleteIncompleteOrders(
   supabase: Sb,
   siteId: string,
   phone: string,
+  placedAtRaw: string | undefined | null,
 ): Promise<number> {
   const phoneNormalized = normalizePhone(phone);
   if (!phoneNormalized) return 0;
+  const placedAt = parseDate(placedAtRaw);
+  if (!placedAt) return 0;
+  const oldestIncompleteAt = new Date(placedAt.getTime() - INCOMPLETE_MATCH_WINDOW_DAYS * DAY_MS);
   const { data: dupIncomplete, error } = await supabase
     .from("orders")
     .select("id")
     .eq("source", "woocommerce_incomplete")
     .eq("source_site_id", siteId)
     .eq("status", "incomplete")
-    .eq("phone_normalized", phoneNormalized);
+    .eq("phone_normalized", phoneNormalized)
+    .gte("created_at", oldestIncompleteAt.toISOString())
+    .lte("created_at", placedAt.toISOString());
   if (error) {
     console.error("[woo-sync incomplete lookup]", error.message);
     return 0;
@@ -307,7 +322,7 @@ export async function syncWooOrdersAll(
         const phone = (b.phone ?? "").trim() || "—";
 
         if (existingSet.has(String(o.id))) {
-          await deleteObsoleteIncompleteOrders(supabase, s.id, phone);
+          await deleteObsoleteIncompleteOrders(supabase, s.id, phone, o.date_created);
           skipped++;
           continue;
         }
@@ -365,6 +380,7 @@ export async function syncWooOrdersAll(
             source: "woocommerce",
             source_site_id: s.id,
             external_order_id: String(o.id),
+            created_at: o.date_created || undefined,
             invoice_note: wooInvoiceNote(o),
             internal_note: unmatchedBlock || null,
           })
@@ -393,9 +409,10 @@ export async function syncWooOrdersAll(
         }
 
         // Promote: if the same shopper had an incomplete row from the WP
-        // tracker for this site, the real Woo order makes it obsolete.
+        // tracker for this site before this Woo order, the real order makes it
+        // obsolete. Older Woo orders must not remove new abandoned carts.
         try {
-          await deleteObsoleteIncompleteOrders(supabase, s.id, phone);
+          await deleteObsoleteIncompleteOrders(supabase, s.id, phone, o.date_created);
         } catch (e) {
           console.error("[woo-sync incomplete cleanup]", e);
         }
