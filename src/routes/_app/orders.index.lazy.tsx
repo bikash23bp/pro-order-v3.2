@@ -963,6 +963,53 @@ function OrdersPage() {
     const { error } = await supabase.from("orders").update(patch as never).eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Order updated");
+
+    // ---- Optimistic cache patch: keeps source/target tabs + topbar counts instant.
+    // Update the row's status in every cached list query that already holds it.
+    if (status !== "__preorder" && prev !== status) {
+      const newStatus = status as OrderStatus;
+      let movedAmount = 0;
+      const listEntries = queryClient.getQueriesData<{ rows: Order[]; totalCount: number } | undefined>({
+        queryKey: ["orders", "list"],
+      });
+      for (const [key, value] of listEntries) {
+        if (!value || !Array.isArray(value.rows)) continue;
+        const idx = value.rows.findIndex((r) => r.id === id);
+        if (idx === -1) continue;
+        if (!movedAmount) movedAmount = Number(value.rows[idx].total_amount ?? 0) || 0;
+        const nextRows = value.rows.slice();
+        nextRows[idx] = { ...nextRows[idx], status: newStatus };
+        queryClient.setQueryData(key, { ...value, rows: nextRows });
+      }
+      // Patch tab-counts cache (decrement prev bucket, increment new bucket).
+      const countsEntries = queryClient.getQueriesData<
+        { tabCountsData: TabCountsData | null; preorderDueCount: number } | undefined
+      >({ queryKey: ["orders", "counts"] });
+      for (const [key, value] of countsEntries) {
+        const tcd = value?.tabCountsData;
+        if (!tcd) continue;
+        const nextByStatus = { ...(tcd.byStatus ?? {}) } as Record<string, { count: number; amount: number }>;
+        const prevBucket = nextByStatus[prev];
+        if (prevBucket) {
+          nextByStatus[prev] = {
+            count: Math.max(0, prevBucket.count - 1),
+            amount: Math.max(0, prevBucket.amount - movedAmount),
+          };
+        }
+        const newBucket = nextByStatus[newStatus] ?? { count: 0, amount: 0 };
+        nextByStatus[newStatus] = {
+          count: newBucket.count + 1,
+          amount: newBucket.amount + movedAmount,
+        };
+        queryClient.setQueryData(key, {
+          ...value,
+          tabCountsData: { ...tcd, byStatus: nextByStatus },
+        });
+      }
+      // Warm the target tab's first page so a click feels instant.
+      prefetchOrderTab(newStatus);
+    }
+
     if (status !== "__preorder" && prev !== status) {
       const kind = status === "completed" ? "confirmed" : status === "shipped" ? "shipped" : null;
       if (kind) {
@@ -971,7 +1018,10 @@ function OrdersPage() {
           .catch(() => { /* logged server-side */ });
       }
     }
-    load();
+    // Background reconcile current tab only (lightweight). Patched caches keep
+    // every other tab instant; eventual realtime/refetch fixes any drift.
+    void queryClient.invalidateQueries({ queryKey: ["orders", "list"], refetchType: "active" });
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("orders:changed"));
   };
 
   const onDelete = async (id: string) => {
