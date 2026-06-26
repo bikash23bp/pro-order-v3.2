@@ -21,8 +21,9 @@ const OrdersInput = z.object({
 
 type CountBucket = { count: number; amount: number };
 
-const ORDER_LIST_SELECT = "id, order_number, invoice_number, customer_name, customer_phone, customer_email, customer_address, status, total_amount, delivery_charge, discount_amount, advance_amount, advance_source_id, advance_txn_id, subtotal, created_at, updated_at, consignment_id, tracking_url, invoice_note, internal_note, courier_id, order_source_id, source, preorder, preorder_date, customer_type, created_by, updated_by, oms_sender_name, oms_sender_order_no, source_site_id, is_paid_marketing, forwarded_to_partner_at, order_sources(name)";
-const ORDER_LIST_SELECT_LEGACY = "id, order_number, invoice_number, customer_name, customer_phone, customer_email, customer_address, status, total_amount, delivery_charge, discount_amount, advance_amount, advance_source_id, advance_txn_id, subtotal, created_at, updated_at, consignment_id, tracking_url, invoice_note, internal_note, courier_id, order_source_id, source, preorder, preorder_date, customer_type, created_by, updated_by, oms_sender_name, oms_sender_order_no, source_site_id, is_paid_marketing, order_sources(name)";
+const ORDER_ITEMS_EMBED = "order_items(quantity, unit_price, products(name, image_url), product_variants(attributes, image_url))";
+const ORDER_LIST_SELECT = `id, order_number, invoice_number, customer_name, customer_phone, customer_email, customer_address, status, total_amount, delivery_charge, discount_amount, advance_amount, advance_source_id, advance_txn_id, subtotal, created_at, updated_at, consignment_id, tracking_url, invoice_note, internal_note, courier_id, order_source_id, source, preorder, preorder_date, customer_type, created_by, updated_by, oms_sender_name, oms_sender_order_no, source_site_id, is_paid_marketing, forwarded_to_partner_at, order_sources(name), ${ORDER_ITEMS_EMBED}`;
+const ORDER_LIST_SELECT_LEGACY = `id, order_number, invoice_number, customer_name, customer_phone, customer_email, customer_address, status, total_amount, delivery_charge, discount_amount, advance_amount, advance_source_id, advance_txn_id, subtotal, created_at, updated_at, consignment_id, tracking_url, invoice_note, internal_note, courier_id, order_source_id, source, preorder, preorder_date, customer_type, created_by, updated_by, oms_sender_name, oms_sender_order_no, source_site_id, is_paid_marketing, order_sources(name), ${ORDER_ITEMS_EMBED}`;
 const ACTIVE_ORDER_STATUSES = new Set([
   "pending_web",
   "pending",
@@ -293,18 +294,12 @@ async function enrichOrdersForList(context: any, orders: any[]) {
   const norms = Array.from(new Set(orders.map((o: any) => normalizePhoneForFlags(o.customer_phone ?? "")).filter(Boolean))) as string[];
   const emails = Array.from(new Set(orders.map((o: any) => String(o.customer_email ?? "").trim().toLowerCase()).filter(Boolean)));
 
-  const [profileRes, siteRes, itemsRes, reviewsByOrderRes, flagsRes] = await Promise.all([
+  const [profileRes, siteRes, reviewsByOrderRes, flagsRes] = await Promise.all([
     userIds.length
       ? context.supabase.from("profiles").select("id, full_name, email").in("id", userIds)
       : Promise.resolve({ data: [] }),
     siteIds.length
       ? context.supabase.from("integrations").select("id, name, site_url").in("id", siteIds)
-      : Promise.resolve({ data: [] }),
-    orderIds.length
-      ? context.supabase
-          .from("order_items")
-            .select("order_id, quantity, unit_price, products(name, image_url), product_variants(attributes, image_url)")
-          .in("order_id", orderIds)
       : Promise.resolve({ data: [] }),
     orderIds.length
       ? (context.supabase as any).from("customer_reviews").select("id, order_id, phone, rating").in("order_id", orderIds)
@@ -343,19 +338,6 @@ async function enrichOrdersForList(context: any, orders: any[]) {
     s.id,
     s.name || (s.site_url ? String(s.site_url).replace(/^https?:\/\//, "").replace(/\/+$/, "") : null),
   ]));
-  const itemMap = new Map<string, any[]>();
-  for (const item of itemsRes.data ?? []) {
-    const key = String((item as any).order_id ?? "");
-    if (!key) continue;
-    const list = itemMap.get(key) ?? [];
-    list.push({
-      quantity: (item as any).quantity,
-      unit_price: (item as any).unit_price,
-      products: (item as any).products ?? null,
-      product_variants: (item as any).product_variants ?? null,
-    });
-    itemMap.set(key, list);
-  }
 
   const reviewRows = (reviewsByOrderRes.data ?? []) as Array<{ id: string; order_id: string | null; phone: string | null; rating: number }>;
   const reviewsByOrder = new Map<string, Map<string, number>>();
@@ -378,7 +360,7 @@ async function enrichOrdersForList(context: any, orders: any[]) {
 
   return orders.map((o: any) => ({
     ...o,
-    order_items: itemMap.get(o.id) ?? [],
+    order_items: Array.isArray(o.order_items) ? o.order_items : [],
     creator: o.created_by ? (profileMap[o.created_by] ?? null) : null,
     editor: o.updated_by ? (profileMap[o.updated_by] ?? null) : null,
     site_name: o.source_site_id ? (siteMap[o.source_site_id] ?? null) : null,
