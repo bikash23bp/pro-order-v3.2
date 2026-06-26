@@ -290,7 +290,10 @@ async function enrichOrdersForList(context: any, orders: any[]) {
   ]));
   const siteIds = Array.from(new Set(orders.map((o: any) => o.source_site_id).filter(Boolean))) as string[];
 
-  const [profileRes, siteRes, itemsRes, reviewsByOrderRes] = await Promise.all([
+  const norms = Array.from(new Set(orders.map((o: any) => normalizePhoneForFlags(o.customer_phone ?? "")).filter(Boolean))) as string[];
+  const emails = Array.from(new Set(orders.map((o: any) => String(o.customer_email ?? "").trim().toLowerCase()).filter(Boolean)));
+
+  const [profileRes, siteRes, itemsRes, reviewsByOrderRes, flagsRes] = await Promise.all([
     userIds.length
       ? context.supabase.from("profiles").select("id, full_name, email").in("id", userIds)
       : Promise.resolve({ data: [] }),
@@ -306,9 +309,31 @@ async function enrichOrdersForList(context: any, orders: any[]) {
     orderIds.length
       ? (context.supabase as any).from("customer_reviews").select("id, order_id, phone, rating").in("order_id", orderIds)
       : Promise.resolve({ data: [], error: null }),
+    (norms.length || emails.length)
+      ? (context.supabase as any).rpc("get_order_customer_flags_v1", { p_phones: norms, p_emails: emails })
+      : Promise.resolve({ data: null, error: null }),
   ]);
 
   if (reviewsByOrderRes.error && !isMissingReviewTableError(reviewsByOrderRes.error)) throw new Error(reviewsByOrderRes.error.message);
+
+  const rawFlags = (flagsRes?.data ?? null) as {
+    phones?: Record<string, { total?: number; returned?: number; active?: number; imported?: boolean; member?: boolean; vip?: boolean }>;
+    emails?: Record<string, { active?: number }>;
+  } | null;
+  const phoneStats = rawFlags?.phones ?? {};
+  const emailStats = rawFlags?.emails ?? {};
+  const flagMap: Record<string, { is_vip: boolean; is_repeat: boolean; is_duplicate: boolean; returned_count: number }> = Object.fromEntries(orders.map((o: any) => {
+    const norm = normalizePhoneForFlags(o.customer_phone ?? "");
+    const email = String(o.customer_email ?? "").trim().toLowerCase();
+    const stat = norm ? phoneStats[norm] : undefined;
+    const emailActive = email ? Number(emailStats[email]?.active ?? 0) : 0;
+    return [o.id, {
+      is_vip: Boolean(stat?.vip),
+      is_repeat: !!norm && (Number(stat?.total ?? 0) >= 2 || Boolean(stat?.imported) || Boolean(stat?.member)),
+      is_duplicate: ACTIVE_ORDER_STATUSES.has(String(o.status)) && (Number(stat?.active ?? 0) >= 2 || emailActive >= 2),
+      returned_count: Number(stat?.returned ?? 0),
+    }];
+  }));
 
   const profileMap = Object.fromEntries((profileRes.data ?? []).map((p: any) => [
     p.id,
@@ -358,8 +383,7 @@ async function enrichOrdersForList(context: any, orders: any[]) {
     editor: o.updated_by ? (profileMap[o.updated_by] ?? null) : null,
     site_name: o.source_site_id ? (siteMap[o.source_site_id] ?? null) : null,
     review_summary: summaryForOrder(o),
-    // customer_flags is fetched separately by the client so the main list returns instantly.
-    customer_flags: null,
+    customer_flags: flagMap[o.id] ?? { is_vip: false, is_repeat: false, is_duplicate: false, returned_count: 0 },
   }));
 }
 
