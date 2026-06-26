@@ -30,12 +30,14 @@ export function GlobalSearch() {
   const [viewOrder, setViewOrder] = useState<DetailOrder | null>(null);
   const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const reqIdRef = useRef(0);
 
   useEffect(() => {
     const termRaw = q.trim();
     if (!termRaw) { setHits([]); setOpen(false); return; }
     const term = toAsciiDigits(termRaw);
     setLoading(true);
+    const myReqId = ++reqIdRef.current;
     const t = setTimeout(async () => {
       const digits = term.replace(/\D/g, "");
       const normPhone = normalizeBDPhone(termRaw);
@@ -58,11 +60,17 @@ export function GlobalSearch() {
         .or(filters.join(","))
         .order("created_at", { ascending: false })
         .limit(8);
+      // Ignore stale responses that resolved after a newer query started.
+      if (myReqId !== reqIdRef.current) return;
       setHits((data ?? []) as unknown as Hit[]);
       setLoading(false);
       setOpen(true);
     }, 300);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      // Invalidate any in-flight request from this effect run.
+      reqIdRef.current++;
+    };
   }, [q]);
 
 
