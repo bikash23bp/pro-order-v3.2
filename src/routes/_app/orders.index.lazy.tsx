@@ -1057,9 +1057,9 @@ function OrdersPage() {
           .catch(() => { /* logged server-side */ });
       }
     }
-    // Background reconcile current tab only (lightweight). Patched caches keep
-    // every other tab instant; eventual realtime/refetch fixes any drift.
-    void queryClient.invalidateQueries({ queryKey: ["orders", "list"], refetchType: "active" });
+    // Debounced reconcile for the current visible page only. Patched caches keep
+    // every other tab instant; multiple quick status moves collapse into one refresh.
+    scheduleStatusReconcile();
     if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("orders:changed"));
   };
 
