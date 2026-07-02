@@ -1835,16 +1835,17 @@ function OrdersPage() {
                   : (isWebOrder ? `Web Order${webSourceLabel ? ` (${webSourceLabel})` : ""}${srcKey !== "woocommerce" ? siteSuffix : ""}` : "—");
                 const isDispatchStatus = r.status === "shipped" || r.status === "ready_to_ship";
                 const courierFailed = isDispatchStatus && !r.consignment_id;
-                const isDuplicate = Boolean(r.customer_flags?.is_duplicate);
+                const customerFlags = visibleFlags[r.id] ?? r.customer_flags ?? { is_vip: false, is_repeat: false, is_duplicate: false, returned_count: 0 };
+                const isDuplicate = Boolean(customerFlags.is_duplicate);
                 const editorLabel = !isWebOrder && r.updated_by && r.updated_by !== r.created_by
                   ? (r.editor?.full_name || r.editor?.email || null)
                   : null;
                 const flags = {
                   isSelected: selected.has(r.id),
                   isAdmin,
-                  isVip: Boolean(r.customer_flags?.is_vip),
+                  isVip: Boolean(customerFlags.is_vip),
                   isDuplicate,
-                  isRepeat: Boolean(r.customer_flags?.is_repeat),
+                  isRepeat: Boolean(customerFlags.is_repeat),
                   isDispatchStatus,
                   courierFailed,
                   creatorLabel,
@@ -1878,7 +1879,7 @@ function OrdersPage() {
                 };
                 const props = { order: r, flags, actions };
                 const blockReason = norm ? blockedPhones[norm] : undefined;
-                const returnCount = !blockReason ? Number(r.customer_flags?.returned_count ?? 0) : 0;
+                const returnCount = !blockReason ? Number(customerFlags.returned_count ?? 0) : 0;
                 const isReturnCustomer = returnCount > 0 || r.status === "returned";
                 const ringClass = blockReason || isReturnCustomer || isDuplicate
                   ? "rounded-md ring-2 ring-red-500/60"
