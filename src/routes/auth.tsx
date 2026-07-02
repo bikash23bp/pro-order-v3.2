@@ -1,9 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
-import { signInWithPasswordOnServer } from "@/lib/auth.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,7 +23,6 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
-  const signInOnServer = useServerFn(signInWithPasswordOnServer);
   const { redirect } = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,18 +41,29 @@ function AuthPage() {
     e.preventDefault();
     setLoading(true);
     const normalizedEmail = email.trim().toLowerCase();
-    
+
+    const timeoutMs = 15000;
+    let timedOut = false;
+    const timeout = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        timedOut = true;
+        reject(new Error("Sign-in is taking too long, please try again"));
+      }, timeoutMs);
+    });
+
     try {
-      const session = await signInOnServer({ data: { email: normalizedEmail, password } });
-      const { error } = await supabase.auth.setSession(session);
-      if (error) throw error;
+      const result = await Promise.race([
+        supabase.auth.signInWithPassword({ email: normalizedEmail, password }),
+        timeout,
+      ]);
+      if (result.error) throw result.error;
     } catch (error) {
       setLoading(false);
+      if (timedOut) return toast.error("Sign-in is taking too long, please try again");
       return toast.error(error instanceof Error ? error.message : "Sign-in failed");
     }
 
     setLoading(false);
-    
     toast.success("Signed in");
     navigate({ to: redirect });
   }

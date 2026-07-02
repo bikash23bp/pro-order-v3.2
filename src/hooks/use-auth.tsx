@@ -24,14 +24,6 @@ type ProfileBundle = {
 };
 
 const CACHE_KEY = (uid: string) => `auth:profile:${uid}`;
-const CURRENT_BACKEND_HOST = (() => {
-  try {
-    const configuredUrl = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-    return configuredUrl ? new URL(configuredUrl).host : null;
-  } catch {
-    return null;
-  }
-})();
 
 // Module-level caches dedupe across hook instances
 const memCache = new Map<string, ProfileBundle>();
@@ -146,15 +138,25 @@ async function fetchProfileBundle(authUser: User): Promise<ProfileBundle | null>
     }
 
     if (!resolvedRole) {
-      // No role assigned. Pending-approval flow is disabled — sign out and
-      // surface a clear error so an admin can grant access.
-      clearLocal(userId);
-      if (typeof window !== "undefined") {
-        const { toast } = await import("sonner");
-        toast.error("No access. Contact an admin to be added as a user.");
+      // Retry once after a short delay — transient network/DB hiccups can
+      // return an empty role list even for valid users. Only sign out when
+      // the retry also confirms no role exists.
+      await new Promise((r) => setTimeout(r, 2500));
+      const retry = await supabase.from("user_roles").select("role").eq("user_id", userId);
+      if (retry.error) {
+        console.warn("[auth] role retry errored, keeping session", retry.error.message);
+        return null;
       }
-      await supabase.auth.signOut();
-      return null;
+      resolvedRole = pickHighestRole(retry.data);
+      if (!resolvedRole) {
+        clearLocal(userId);
+        if (typeof window !== "undefined") {
+          const { toast } = await import("sonner");
+          toast.error("No access. Contact an admin to be added as a user.");
+        }
+        await supabase.auth.signOut();
+        return null;
+      }
     }
 
     const bundle: ProfileBundle = {
@@ -224,50 +226,30 @@ export function useAuth() {
   }
 
   useEffect(() => {
-    async function clearForeignBackendSession(sess: Session | null): Promise<boolean> {
-      const issuer = sess?.user?.aud ? sess.access_token.split(".")[1] : null;
-      if (!issuer || typeof window === "undefined") return false;
-      try {
-        const payload = JSON.parse(window.atob(issuer.replace(/-/g, "+").replace(/_/g, "/"))) as { iss?: string };
-        if (!CURRENT_BACKEND_HOST || !payload.iss || payload.iss.includes(CURRENT_BACKEND_HOST)) return false;
-        await supabase.auth.signOut();
-        setSession(null);
-        setUser(null);
-        setLoading(false);
-        return true;
-      } catch {
-        return false;
-      }
-    }
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
-      clearForeignBackendSession(sess).then((cleared) => {
-        if (cleared) return;
-        setSession(sess);
-        setUser(sess?.user ?? null);
-        setLoading(false);
-        if (sess?.user) {
-          // Only re-hydrate when the user actually changes — avoids extra
-          // profile fetches on TOKEN_REFRESHED / INITIAL_SESSION which cause
-          // loading flashes during login.
-          if (lastUidRef.current !== sess.user.id) {
-            lastUidRef.current = sess.user.id;
-            setProfileLoading(true); // set synchronously to avoid race with route guards
-            setTimeout(() => hydrate(sess.user), 0);
-          }
-        } else {
-          lastUidRef.current = null;
-          setRole(null);
-          setPermissions(null);
-          setProfile(null);
-          setProfileLoading(false);
-          clearLocal();
+      setSession(sess);
+      setUser(sess?.user ?? null);
+      setLoading(false);
+      if (sess?.user) {
+        // Only re-hydrate when the user actually changes — avoids extra
+        // profile fetches on TOKEN_REFRESHED / INITIAL_SESSION which cause
+        // loading flashes during login.
+        if (lastUidRef.current !== sess.user.id) {
+          lastUidRef.current = sess.user.id;
+          setProfileLoading(true);
+          setTimeout(() => hydrate(sess.user), 0);
         }
-      });
+      } else {
+        lastUidRef.current = null;
+        setRole(null);
+        setPermissions(null);
+        setProfile(null);
+        setProfileLoading(false);
+        clearLocal();
+      }
     });
 
-    supabase.auth.getSession().then(async ({ data: { session: sess } }) => {
-      if (await clearForeignBackendSession(sess)) return;
+    supabase.auth.getSession().then(({ data: { session: sess } }) => {
       setUser(sess?.user ?? null);
       if (sess?.user) {
         if (lastUidRef.current !== sess.user.id) {
