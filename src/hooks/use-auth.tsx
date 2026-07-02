@@ -145,6 +145,10 @@ async function fetchProfileBundle(authUser: User): Promise<ProfileBundle | null>
       const retry = await supabase.from("user_roles").select("role").eq("user_id", userId);
       if (retry.error) {
         console.warn("[auth] role retry errored, keeping session", retry.error.message);
+        if (typeof window !== "undefined") {
+          const { toast } = await import("sonner");
+          toast.error(`Couldn't verify your access: ${retry.error.message}. You stay signed in — please refresh in a moment.`);
+        }
         return null;
       }
       resolvedRole = pickHighestRole(retry.data);
@@ -152,7 +156,9 @@ async function fetchProfileBundle(authUser: User): Promise<ProfileBundle | null>
         clearLocal(userId);
         if (typeof window !== "undefined") {
           const { toast } = await import("sonner");
-          toast.error("No access. Contact an admin to be added as a user.");
+          toast.error(
+            `No role is assigned to ${userEmail ?? "your account"}. Ask an admin to grant you access, then sign in again.`,
+          );
         }
         await supabase.auth.signOut();
         return null;
