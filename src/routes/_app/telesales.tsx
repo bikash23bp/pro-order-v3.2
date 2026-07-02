@@ -401,6 +401,7 @@ function TelesalesPage() {
                     onOpenDetail: (id) => setDetailId(id),
                     onOpenComplaints: (phone, name) => setComplaintFor({ phone, name }),
                     onOpenReviews: (phone, name, orderId) => setReviewFor({ phone, name, orderId }),
+                    onOpenDuplicates: (customerId, phone, name) => setDupFor({ customerId, phone, name }),
                     onSaveNote: async (id, note) => {
                       await updateFn({ data: { id, note } });
                       setRows((prev) => prev.map((x) => x.id === id ? { ...x, note } : x));
@@ -421,7 +422,7 @@ function TelesalesPage() {
                     <div key={r.id}>
                       {activeTemplate.render({
                         row: {
-                          id: r.id, name: r.name, phone: r.phone, address: r.address,
+                          id: r.id, customer_id: r.customer_id, name: r.name, phone: r.phone, address: r.address,
                           status: r.status, last_action: r.last_action, note: r.note,
                           assigned_to: r.assigned_to, assigned_to_name: r.assigned_to_name,
                           order_count: r.order_count,
