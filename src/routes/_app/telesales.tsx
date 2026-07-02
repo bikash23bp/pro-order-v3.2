@@ -98,6 +98,7 @@ function TelesalesPage() {
   const qc = useQueryClient();
   const { isAdmin, permissions } = useAuth();
   const canViewTeleReports = isAdmin || !!permissions?.can_view_telesales_reports;
+  const canManageTele = isAdmin || !!permissions?.can_manage_telesales;
 
   const [tab, setTab] = useState<Tab>("all");
   const [search, setSearch] = useState("");
