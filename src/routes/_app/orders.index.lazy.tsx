@@ -780,6 +780,18 @@ function OrdersPage() {
   // Back-compat alias so existing call sites stay terse.
   const load = (showToast = false) => { void refetchAll(showToast); };
 
+  const scheduleStatusReconcile = useCallback(() => {
+    if (statusReconcileTimerRef.current) clearTimeout(statusReconcileTimerRef.current);
+    statusReconcileTimerRef.current = setTimeout(() => {
+      statusReconcileTimerRef.current = null;
+      void queryClient.invalidateQueries({ queryKey: ordersQueryKey, exact: true, refetchType: "active" });
+    }, 900);
+  }, [ordersQueryKey, queryClient]);
+
+  useEffect(() => () => {
+    if (statusReconcileTimerRef.current) clearTimeout(statusReconcileTimerRef.current);
+  }, []);
+
   // Clear selection when filters/page change to avoid cross-page partial bulks.
   useEffect(() => {
     setSelected(new Set());
