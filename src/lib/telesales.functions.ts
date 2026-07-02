@@ -505,8 +505,10 @@ export const getTelesalesDuplicateAssignments = createServerFn({ method: "POST" 
     z.object({ customerId: z.string().uuid() }).parse(input),
   )
   .handler(async ({ data, context }): Promise<TeleDuplicateRow[]> => {
-    const { supabase, userId } = context;
-    const { data: rows, error } = await supabase
+    const { userId } = context;
+    // Cross-user visibility for coordination — bypass per-user RLS filter.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: rows, error } = await supabaseAdmin
       .from("telesales_assignments")
       .select("id, status, assigned_to, created_by, created_at, last_contacted_at, order_id")
       .eq("customer_id", data.customerId)
@@ -520,7 +522,7 @@ export const getTelesalesDuplicateAssignments = createServerFn({ method: "POST" 
     }
     let nameMap = new Map<string, string>();
     if (ids.size > 0) {
-      const { data: profs } = await supabase
+      const { data: profs } = await supabaseAdmin
         .from("profiles").select("id, full_name, email").in("id", Array.from(ids));
       nameMap = new Map((profs ?? []).map((p: any) => [p.id, p.full_name || p.email || "User"]));
     }
