@@ -20,6 +20,8 @@ import {
   listTelesalesStaff, listUnassignedCustomers, importTelesalesCustomers,
   reassignTelesalesAssignment, listSystemCustomersForTelesales,
   assignSystemCustomersToTelesales, clearTelesalesAssignments,
+  getTelesalesDuplicateAssignments, unassignMyTelesalesAssignment,
+  type TeleDuplicateRow,
   type TeleAssignment,
 } from "@/lib/telesales.functions";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -111,6 +113,7 @@ function TelesalesPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [complaintFor, setComplaintFor] = useState<{ phone: string; name: string | null } | null>(null);
   const [reviewFor, setReviewFor] = useState<{ phone: string; name: string | null; orderId?: string | null } | null>(null);
+  const [dupFor, setDupFor] = useState<{ customerId: string; phone: string; name: string | null } | null>(null);
 
   const { desktopTemplate, mobileTemplate } = useTeleTemplate();
   const isMobile = useIsMobile();
