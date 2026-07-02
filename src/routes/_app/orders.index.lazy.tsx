@@ -615,7 +615,7 @@ function OrdersPage() {
   const listLoadFailed = ordersQuery.isError && !ordersQuery.data;
 
   useEffect(() => {
-    if (!session || loading) return;
+    if (!session || loading || ordersQuery.isPlaceholderData) return;
     if (page !== serverPage) {
       navigate({
         to: "/orders",
@@ -626,7 +626,7 @@ function OrdersPage() {
         }),
       });
     }
-  }, [session, loading, page, serverPage, navigate]);
+  }, [session, loading, ordersQuery.isPlaceholderData, page, serverPage, navigate]);
 
   useEffect(() => {
     if (ordersQuery.error) toast.error((ordersQuery.error as Error).message);
@@ -687,6 +687,30 @@ function OrdersPage() {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visiblePhonesKey]);
+
+  const visibleFlagOrders = useMemo(
+    () => rows.map((o) => ({
+      id: o.id,
+      phone: o.customer_phone,
+      email: o.customer_email,
+      status: o.status,
+    })),
+    [rows],
+  );
+  const visibleFlagKey = useMemo(
+    () => visibleFlagOrders.map((o) => `${o.id}:${o.phone ?? ""}:${o.email ?? ""}:${o.status ?? ""}`).join("|"),
+    [visibleFlagOrders],
+  );
+  const flagsQuery = useQuery({
+    queryKey: ["orders", "list-flags", visibleFlagKey],
+    enabled: !!session && visibleFlagOrders.length > 0,
+    staleTime: ORDER_LIST_STALE_MS,
+    gcTime: ORDER_LIST_GC_MS,
+    retry: 1,
+    placeholderData: keepPreviousData,
+    queryFn: async () => getListFlags({ data: { orders: visibleFlagOrders } }),
+  });
+  const visibleFlags = visibleFlagOrders.length ? (flagsQuery.data ?? {}) : {};
 
   // ============ Tab counts query ============
   const countsQueryKey = useMemo(
