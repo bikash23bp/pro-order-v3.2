@@ -503,7 +503,132 @@ function TelesalesPage() {
           orderId={reviewFor.orderId ?? null}
         />
       )}
+
+      {dupFor && (
+        <DuplicatesDialog
+          info={dupFor}
+          onClose={() => setDupFor(null)}
+          onChanged={reload}
+        />
+      )}
     </div>
+  );
+}
+
+function DuplicatesDialog({
+  info, onClose, onChanged,
+}: {
+  info: { customerId: string; phone: string; name: string | null };
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const fetchDup = useServerFn(getTelesalesDuplicateAssignments);
+  const unassignFn = useServerFn(unassignMyTelesalesAssignment);
+  const [rows, setRows] = useState<TeleDuplicateRow[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await fetchDup({ data: { customerId: info.customerId } });
+      setRows(r);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load duplicates");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [info.customerId]);
+
+  const handleUnassign = async (id: string) => {
+    setBusy(id);
+    try {
+      await unassignFn({ data: { id } });
+      toast.success("Unassigned");
+      await load();
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleString() : "—";
+  const currentHolders = (rows ?? []).filter((r) => r.assigned_to);
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Duplicate assignments — {info.name ?? info.phone}</DialogTitle>
+        </DialogHeader>
+
+        {loading ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin inline mr-2" /> Loading…
+          </div>
+        ) : !rows || rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">No assignments found.</p>
+        ) : (
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground">
+              Total {rows.length} assignment(s) · Currently assigned to{" "}
+              <span className="font-medium text-foreground">
+                {currentHolders.length
+                  ? currentHolders.map((r) => r.assigned_to_name ?? "User").join(", ")
+                  : "nobody"}
+              </span>
+            </div>
+
+            <div className="rounded-md border divide-y">
+              {rows.map((r) => (
+                <div key={r.id} className="p-3 text-sm flex flex-wrap gap-x-4 gap-y-1 items-center">
+                  <div className="min-w-[180px]">
+                    <div className="font-medium">
+                      {r.assigned_to
+                        ? (r.assigned_to_name ?? "User")
+                        : <span className="text-muted-foreground">Unassigned</span>}
+                      {r.is_mine && <Badge variant="secondary" className="ml-2 text-[10px]">You</Badge>}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Status: {r.status}{r.order_id ? " · Ordered" : ""}
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground min-w-[160px]">
+                    <div>Assigned: {fmt(r.created_at)}</div>
+                    <div>By: {r.created_by_name ?? "—"}</div>
+                    {r.last_contacted_at && <div>Last call: {fmt(r.last_contacted_at)}</div>}
+                  </div>
+                  <div className="ml-auto">
+                    {r.is_mine && (
+                      <Button
+                        size="sm" variant="outline"
+                        disabled={busy === r.id}
+                        onClick={() => handleUnassign(r.id)}
+                      >
+                        {busy === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                        Unassign me
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Coordinate with the other assignee(s) directly — only one of you should keep this customer.
+            </p>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
