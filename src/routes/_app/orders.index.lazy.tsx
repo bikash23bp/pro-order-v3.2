@@ -558,6 +558,7 @@ function OrdersPage() {
     refetchOnMount: "always",
     retry: transientOrderLoadRetry,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       return await listOrders({ data: {
         status: effectiveStatusFilter, page, limit,
@@ -608,8 +609,8 @@ function OrdersPage() {
   const rows: Order[] = ordersQuery.data?.rows ?? [];
   const totalCount = ordersQuery.data?.totalCount ?? 0;
   const serverPage = ordersQuery.data?.currentPage ?? page;
-  const loading = ordersQuery.isPending;
-  const refreshing = ordersQuery.isFetching && !ordersQuery.isPending;
+  const loading = ordersQuery.isPending && !ordersQuery.data;
+  const refreshing = ordersQuery.isFetching && !loading;
   const listTimedOut = Boolean((ordersQuery.data as { timedOut?: boolean } | undefined)?.timedOut);
   const listLoadFailed = ordersQuery.isError && !ordersQuery.data;
 
