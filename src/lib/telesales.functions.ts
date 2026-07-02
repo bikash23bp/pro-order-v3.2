@@ -486,6 +486,92 @@ export const bulkUpdateTelesalesStatus = createServerFn({ method: "POST" })
     return count ?? 0;
   });
 
+export type TeleDuplicateRow = {
+  id: string;
+  status: "pending" | "complete" | "hold";
+  assigned_to: string | null;
+  assigned_to_name: string | null;
+  created_by: string | null;
+  created_by_name: string | null;
+  created_at: string;
+  last_contacted_at: string | null;
+  order_id: string | null;
+  is_mine: boolean;
+};
+
+export const getTelesalesDuplicateAssignments = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ customerId: z.string().uuid() }).parse(input),
+  )
+  .handler(async ({ data, context }): Promise<TeleDuplicateRow[]> => {
+    const { userId } = context;
+    // Cross-user visibility for coordination — bypass per-user RLS filter.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: rows, error } = await supabaseAdmin
+      .from("telesales_assignments")
+      .select("id, status, assigned_to, created_by, created_at, last_contacted_at, order_id")
+      .eq("customer_id", data.customerId)
+      .order("created_at", { ascending: true });
+    if (error) throw new Error(error.message);
+
+    const ids = new Set<string>();
+    for (const r of rows ?? []) {
+      if (r.assigned_to) ids.add(r.assigned_to);
+      if (r.created_by) ids.add(r.created_by);
+    }
+    let nameMap = new Map<string, string>();
+    if (ids.size > 0) {
+      const { data: profs } = await supabaseAdmin
+        .from("profiles").select("id, full_name, email").in("id", Array.from(ids));
+      nameMap = new Map((profs ?? []).map((p: any) => [p.id, p.full_name || p.email || "User"]));
+    }
+
+    return (rows ?? []).map((r: any) => ({
+      id: r.id,
+      status: r.status,
+      assigned_to: r.assigned_to,
+      assigned_to_name: r.assigned_to ? nameMap.get(r.assigned_to) ?? null : null,
+      created_by: r.created_by,
+      created_by_name: r.created_by ? nameMap.get(r.created_by) ?? null : null,
+      created_at: r.created_at,
+      last_contacted_at: r.last_contacted_at,
+      order_id: r.order_id,
+      is_mine: r.assigned_to === userId,
+    }));
+  });
+
+export const unassignMyTelesalesAssignment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ id: z.string().uuid() }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: row, error: rErr } = await supabase
+      .from("telesales_assignments")
+      .select("id, assigned_to")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (rErr) throw new Error(rErr.message);
+    if (!row) throw new Error("Assignment not found");
+    if (row.assigned_to !== userId) throw new Error("You can only unassign your own rows");
+
+    const { error } = await supabase
+      .from("telesales_assignments")
+      .update({ assigned_to: null })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+
+    await supabase.from("telesales_call_logs").insert({
+      assignment_id: data.id,
+      reassigned_to: null,
+      note: "Self-unassigned",
+      created_by: userId,
+    });
+    return { ok: true };
+  });
+
 export const getTelesalesDetail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
