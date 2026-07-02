@@ -59,8 +59,18 @@ function AuthPage() {
       if (result.error) throw result.error;
     } catch (error) {
       setLoading(false);
-      if (timedOut) return toast.error("Sign-in is taking too long, please try again");
-      return toast.error(error instanceof Error ? error.message : "Sign-in failed");
+      if (timedOut) {
+        return toast.error("Sign-in is taking too long. Check your internet connection and try again.");
+      }
+      const raw = error instanceof Error ? error.message : String(error ?? "");
+      const lower = raw.toLowerCase();
+      let friendly = raw || "Sign-in failed. Please try again.";
+      if (lower.includes("invalid login")) friendly = "Wrong email or password. Please try again.";
+      else if (lower.includes("email not confirmed")) friendly = "Please confirm your email before signing in.";
+      else if (lower.includes("rate limit") || lower.includes("too many")) friendly = "Too many attempts. Wait a minute and try again.";
+      else if (lower.includes("network") || lower.includes("fetch")) friendly = "Network error — check your connection and try again.";
+      else if (lower.includes("user not found")) friendly = "No account found for this email.";
+      return toast.error(friendly);
     }
 
     setLoading(false);
