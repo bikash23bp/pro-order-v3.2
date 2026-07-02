@@ -24,6 +24,8 @@ type CountBucket = { count: number; amount: number };
 const ORDER_ITEMS_EMBED = "order_items(quantity, unit_price, products(name, image_url), product_variants(attributes, image_url))";
 const ORDER_LIST_SELECT = `id, order_number, invoice_number, customer_name, customer_phone, customer_email, customer_address, status, total_amount, delivery_charge, discount_amount, advance_amount, advance_source_id, advance_txn_id, subtotal, created_at, updated_at, consignment_id, tracking_url, invoice_note, internal_note, courier_id, order_source_id, source, preorder, preorder_date, customer_type, created_by, updated_by, oms_sender_name, oms_sender_order_no, source_site_id, is_paid_marketing, forwarded_to_partner_at, order_sources(name), ${ORDER_ITEMS_EMBED}`;
 const ORDER_LIST_SELECT_LEGACY = `id, order_number, invoice_number, customer_name, customer_phone, customer_email, customer_address, status, total_amount, delivery_charge, discount_amount, advance_amount, advance_source_id, advance_txn_id, subtotal, created_at, updated_at, consignment_id, tracking_url, invoice_note, internal_note, courier_id, order_source_id, source, preorder, preorder_date, customer_type, created_by, updated_by, oms_sender_name, oms_sender_order_no, source_site_id, is_paid_marketing, order_sources(name), ${ORDER_ITEMS_EMBED}`;
+const OMS_SENDERS_CACHE_TTL_MS = 25_000;
+const omsSendersCache = new Map<string, { expiresAt: number; promise: Promise<string[] | null> }>();
 const ACTIVE_ORDER_STATUSES = new Set([
   "pending_web",
   "pending",
@@ -122,7 +124,7 @@ function isMissingReviewTableError(error: unknown): boolean {
     || message.includes('relation "customer_reviews" does not exist');
 }
 
-async function getAllowedOmsSenders(ctx: { supabase: any; userId: string }): Promise<string[] | null> {
+async function computeAllowedOmsSenders(ctx: { supabase: any; userId: string }): Promise<string[] | null> {
   // Try to get role from JWT first (zero DB round-trips for admins)
   const { data: { user } } = await ctx.supabase.auth.getUser();
   const jwtRole = (user?.app_metadata?.role ?? user?.user_metadata?.role ?? "") as string;
@@ -142,6 +144,19 @@ async function getAllowedOmsSenders(ctx: { supabase: any; userId: string }): Pro
   if (roles.has("admin") || roles.has("business_owner")) return null;
   if ((profileRes.data?.permissions as any)?.can_view_all_orders) return null;
   return ((accessRes.data ?? []) as { sender_name: string }[]).map((r) => r.sender_name);
+}
+
+async function getAllowedOmsSenders(ctx: { supabase: any; userId: string }): Promise<string[] | null> {
+  const now = Date.now();
+  const cached = omsSendersCache.get(ctx.userId);
+  if (cached && cached.expiresAt > now) return cached.promise;
+
+  const promise = computeAllowedOmsSenders(ctx).catch((error) => {
+    if (omsSendersCache.get(ctx.userId)?.promise === promise) omsSendersCache.delete(ctx.userId);
+    throw error;
+  });
+  omsSendersCache.set(ctx.userId, { expiresAt: now + OMS_SENDERS_CACHE_TTL_MS, promise });
+  return promise;
 }
 
 function applyOmsAccessFilter(qb: any, allowed: string[] | null) {
@@ -284,51 +299,23 @@ async function fetchOrdersPageWithoutCount(
 }
 
 async function enrichOrdersForList(context: any, orders: any[]) {
-  const orderIds = orders.map((o: any) => o.id).filter(Boolean) as string[];
   const userIds = Array.from(new Set([
     ...orders.map((o: any) => o.created_by).filter(Boolean),
     ...orders.map((o: any) => o.updated_by).filter(Boolean),
   ]));
   const siteIds = Array.from(new Set(orders.map((o: any) => o.source_site_id).filter(Boolean))) as string[];
 
-  const norms = Array.from(new Set(orders.map((o: any) => normalizePhoneForFlags(o.customer_phone ?? "")).filter(Boolean))) as string[];
-  const emails = Array.from(new Set(orders.map((o: any) => String(o.customer_email ?? "").trim().toLowerCase()).filter(Boolean)));
-
-  const [profileRes, siteRes, reviewsByOrderRes, flagsRes] = await Promise.all([
+  // Keep the main order-list path light: only fetch data needed to render the
+  // card shell. Duplicate/VIP/return flags are loaded by getOrderListFlags in a
+  // separate background query so they don't block the first card paint.
+  const [profileRes, siteRes] = await Promise.all([
     userIds.length
       ? context.supabase.from("profiles").select("id, full_name, email").in("id", userIds)
       : Promise.resolve({ data: [] }),
     siteIds.length
       ? context.supabase.from("integrations").select("id, name, site_url").in("id", siteIds)
       : Promise.resolve({ data: [] }),
-    orderIds.length
-      ? (context.supabase as any).from("customer_reviews").select("id, order_id, phone, rating").in("order_id", orderIds)
-      : Promise.resolve({ data: [], error: null }),
-    (norms.length || emails.length)
-      ? (context.supabase as any).rpc("get_order_customer_flags_v1", { p_phones: norms, p_emails: emails })
-      : Promise.resolve({ data: null, error: null }),
   ]);
-
-  if (reviewsByOrderRes.error && !isMissingReviewTableError(reviewsByOrderRes.error)) throw new Error(reviewsByOrderRes.error.message);
-
-  const rawFlags = (flagsRes?.data ?? null) as {
-    phones?: Record<string, { total?: number; returned?: number; active?: number; imported?: boolean; member?: boolean; vip?: boolean }>;
-    emails?: Record<string, { active?: number }>;
-  } | null;
-  const phoneStats = rawFlags?.phones ?? {};
-  const emailStats = rawFlags?.emails ?? {};
-  const flagMap: Record<string, { is_vip: boolean; is_repeat: boolean; is_duplicate: boolean; returned_count: number }> = Object.fromEntries(orders.map((o: any) => {
-    const norm = normalizePhoneForFlags(o.customer_phone ?? "");
-    const email = String(o.customer_email ?? "").trim().toLowerCase();
-    const stat = norm ? phoneStats[norm] : undefined;
-    const emailActive = email ? Number(emailStats[email]?.active ?? 0) : 0;
-    return [o.id, {
-      is_vip: Boolean(stat?.vip),
-      is_repeat: !!norm && (Number(stat?.total ?? 0) >= 2 || Boolean(stat?.imported) || Boolean(stat?.member)),
-      is_duplicate: ACTIVE_ORDER_STATUSES.has(String(o.status)) && (Number(stat?.active ?? 0) >= 2 || emailActive >= 2),
-      returned_count: Number(stat?.returned ?? 0),
-    }];
-  }));
 
   const profileMap = Object.fromEntries((profileRes.data ?? []).map((p: any) => [
     p.id,
@@ -339,33 +326,14 @@ async function enrichOrdersForList(context: any, orders: any[]) {
     s.name || (s.site_url ? String(s.site_url).replace(/^https?:\/\//, "").replace(/\/+$/, "") : null),
   ]));
 
-  const reviewRows = (reviewsByOrderRes.data ?? []) as Array<{ id: string; order_id: string | null; phone: string | null; rating: number }>;
-  const reviewsByOrder = new Map<string, Map<string, number>>();
-  const addReview = (map: Map<string, Map<string, number>>, key: string | null | undefined, review: { id: string; rating: number }) => {
-    if (!key) return;
-    const bucket = map.get(key) ?? new Map<string, number>();
-    bucket.set(review.id, Number(review.rating));
-    map.set(key, bucket);
-  };
-  for (const review of reviewRows) {
-    addReview(reviewsByOrder, review.order_id, review);
-  }
-  const summaryForOrder = (order: any) => {
-    const bucket = reviewsByOrder.get(order.id);
-    if (!bucket || bucket.size === 0) return null;
-    const ratings = Array.from(bucket.values());
-    const sum = ratings.reduce((acc, rating) => acc + rating, 0);
-    return { count: ratings.length, avg: sum / ratings.length };
-  };
-
   return orders.map((o: any) => ({
     ...o,
     order_items: Array.isArray(o.order_items) ? o.order_items : [],
     creator: o.created_by ? (profileMap[o.created_by] ?? null) : null,
     editor: o.updated_by ? (profileMap[o.updated_by] ?? null) : null,
     site_name: o.source_site_id ? (siteMap[o.source_site_id] ?? null) : null,
-    review_summary: summaryForOrder(o),
-    customer_flags: flagMap[o.id] ?? { is_vip: false, is_repeat: false, is_duplicate: false, returned_count: 0 },
+    review_summary: null,
+    customer_flags: { is_vip: false, is_repeat: false, is_duplicate: false, returned_count: 0 },
   }));
 }
 

@@ -33,7 +33,7 @@ import { getDuplicatePhones } from "@/lib/duplicates.functions";
 import { normalizePhoneClient } from "@/lib/duplicates.shared";
 import { sendOrderStatusSms, sendBulkOrderSms } from "@/lib/sms.functions";
 import { syncWooOrders } from "@/lib/woo-sync.functions";
-import { exportOrdersPage, getOrderCountsPage, getOrderFilterOptions, listOrdersPage } from "@/lib/orders-page.functions";
+import { exportOrdersPage, getOrderCountsPage, getOrderFilterOptions, getOrderListFlags, listOrdersPage } from "@/lib/orders-page.functions";
 import { listIntegrationLabels } from "@/lib/integrations.functions";
 import { importTelesalesCustomers } from "@/lib/telesales.functions";
 import { syncAllCourierStatuses } from "@/lib/courier-sync.functions";
@@ -307,6 +307,7 @@ function OrdersPage() {
   const search = useSearch({ from: "/_app/orders/" });
   const navigate = useNavigate({ from: "/_app/orders/" });
   const queryClient = useQueryClient();
+  const statusReconcileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>(search.dup ? "all" : (search.status ?? "pending"));
@@ -362,6 +363,7 @@ function OrdersPage() {
   const assignTelesales = useServerFn(importTelesalesCustomers);
   const listOrders = useServerFn(listOrdersPage);
   const getOrderCounts = useServerFn(getOrderCountsPage);
+  const getListFlags = useServerFn(getOrderListFlags);
   const getFilterOptions = useServerFn(getOrderFilterOptions);
   const fetchSites = useServerFn(listIntegrationLabels);
 
@@ -556,6 +558,7 @@ function OrdersPage() {
     refetchOnMount: "always",
     retry: transientOrderLoadRetry,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       return await listOrders({ data: {
         status: effectiveStatusFilter, page, limit,
@@ -606,13 +609,13 @@ function OrdersPage() {
   const rows: Order[] = ordersQuery.data?.rows ?? [];
   const totalCount = ordersQuery.data?.totalCount ?? 0;
   const serverPage = ordersQuery.data?.currentPage ?? page;
-  const loading = ordersQuery.isPending;
-  const refreshing = ordersQuery.isFetching && !ordersQuery.isPending;
+  const loading = ordersQuery.isPending && !ordersQuery.data;
+  const refreshing = ordersQuery.isFetching && !loading;
   const listTimedOut = Boolean((ordersQuery.data as { timedOut?: boolean } | undefined)?.timedOut);
   const listLoadFailed = ordersQuery.isError && !ordersQuery.data;
 
   useEffect(() => {
-    if (!session || loading) return;
+    if (!session || loading || ordersQuery.isPlaceholderData) return;
     if (page !== serverPage) {
       navigate({
         to: "/orders",
@@ -623,7 +626,7 @@ function OrdersPage() {
         }),
       });
     }
-  }, [session, loading, page, serverPage, navigate]);
+  }, [session, loading, ordersQuery.isPlaceholderData, page, serverPage, navigate]);
 
   useEffect(() => {
     if (ordersQuery.error) toast.error((ordersQuery.error as Error).message);
@@ -684,6 +687,30 @@ function OrdersPage() {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visiblePhonesKey]);
+
+  const visibleFlagOrders = useMemo(
+    () => rows.map((o) => ({
+      id: o.id,
+      phone: o.customer_phone,
+      email: o.customer_email,
+      status: o.status,
+    })),
+    [rows],
+  );
+  const visibleFlagKey = useMemo(
+    () => visibleFlagOrders.map((o) => `${o.id}:${o.phone ?? ""}:${o.email ?? ""}:${o.status ?? ""}`).join("|"),
+    [visibleFlagOrders],
+  );
+  const flagsQuery = useQuery({
+    queryKey: ["orders", "list-flags", visibleFlagKey],
+    enabled: !!session && visibleFlagOrders.length > 0,
+    staleTime: ORDER_LIST_STALE_MS,
+    gcTime: ORDER_LIST_GC_MS,
+    retry: 1,
+    placeholderData: keepPreviousData,
+    queryFn: async () => getListFlags({ data: { orders: visibleFlagOrders } }),
+  });
+  const visibleFlags = visibleFlagOrders.length ? (flagsQuery.data ?? {}) : {};
 
   // ============ Tab counts query ============
   const countsQueryKey = useMemo(
@@ -752,6 +779,18 @@ function OrdersPage() {
 
   // Back-compat alias so existing call sites stay terse.
   const load = (showToast = false) => { void refetchAll(showToast); };
+
+  const scheduleStatusReconcile = useCallback(() => {
+    if (statusReconcileTimerRef.current) clearTimeout(statusReconcileTimerRef.current);
+    statusReconcileTimerRef.current = setTimeout(() => {
+      statusReconcileTimerRef.current = null;
+      void queryClient.invalidateQueries({ queryKey: ordersQueryKey, exact: true, refetchType: "active" });
+    }, 900);
+  }, [ordersQueryKey, queryClient]);
+
+  useEffect(() => () => {
+    if (statusReconcileTimerRef.current) clearTimeout(statusReconcileTimerRef.current);
+  }, []);
 
   // Clear selection when filters/page change to avoid cross-page partial bulks.
   useEffect(() => {
@@ -1018,9 +1057,9 @@ function OrdersPage() {
           .catch(() => { /* logged server-side */ });
       }
     }
-    // Background reconcile current tab only (lightweight). Patched caches keep
-    // every other tab instant; eventual realtime/refetch fixes any drift.
-    void queryClient.invalidateQueries({ queryKey: ["orders", "list"], refetchType: "active" });
+    // Debounced reconcile for the current visible page only. Patched caches keep
+    // every other tab instant; multiple quick status moves collapse into one refresh.
+    scheduleStatusReconcile();
     if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("orders:changed"));
   };
 
@@ -1727,7 +1766,22 @@ function OrdersPage() {
           </div>
 
           {loading ? (
-            <div className="p-8 text-center text-muted-foreground">Loading…</div>
+            <div className="p-3 sm:p-4 space-y-3 bg-muted/20" aria-label="Loading orders">
+              {Array.from({ length: Math.min(limit, 6) }).map((_, index) => (
+                <div key={index} className="rounded-md border bg-card p-4 space-y-3 animate-pulse">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="h-4 w-36 rounded bg-muted" />
+                    <div className="h-4 w-24 rounded bg-muted" />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="h-10 rounded bg-muted" />
+                    <div className="h-10 rounded bg-muted" />
+                    <div className="h-10 rounded bg-muted" />
+                  </div>
+                  <div className="h-8 rounded bg-muted" />
+                </div>
+              ))}
+            </div>
           ) : listTimedOut ? (
             <div className="p-12 text-center text-muted-foreground space-y-3">
               <div>This filter is taking too long. Try search/date filters or retry.</div>
@@ -1745,7 +1799,13 @@ function OrdersPage() {
           ) : totalCount === 0 ? (
             <div className="p-12 text-center text-muted-foreground">No orders found.</div>
           ) : (
-            <div className="p-3 sm:p-4 space-y-3 bg-muted/20">
+            <div className={`relative p-3 sm:p-4 space-y-3 bg-muted/20 transition-opacity ${refreshing ? "opacity-80" : "opacity-100"}`}>
+              {refreshing && (
+                <div className="sticky top-2 z-[1] ml-auto flex w-fit items-center gap-1.5 rounded-md border bg-card/95 px-2.5 py-1 text-xs text-muted-foreground shadow-sm">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Refreshing…
+                </div>
+              )}
               {paginated.map((r) => {
                 const norm = normalizePhoneClient(r.customer_phone || "");
                 const sourceLabel = r.order_sources?.name ?? r.source ?? null;
@@ -1775,16 +1835,17 @@ function OrdersPage() {
                   : (isWebOrder ? `Web Order${webSourceLabel ? ` (${webSourceLabel})` : ""}${srcKey !== "woocommerce" ? siteSuffix : ""}` : "—");
                 const isDispatchStatus = r.status === "shipped" || r.status === "ready_to_ship";
                 const courierFailed = isDispatchStatus && !r.consignment_id;
-                const isDuplicate = Boolean(r.customer_flags?.is_duplicate);
+                const customerFlags = visibleFlags[r.id] ?? r.customer_flags ?? { is_vip: false, is_repeat: false, is_duplicate: false, returned_count: 0 };
+                const isDuplicate = Boolean(customerFlags.is_duplicate);
                 const editorLabel = !isWebOrder && r.updated_by && r.updated_by !== r.created_by
                   ? (r.editor?.full_name || r.editor?.email || null)
                   : null;
                 const flags = {
                   isSelected: selected.has(r.id),
                   isAdmin,
-                  isVip: Boolean(r.customer_flags?.is_vip),
+                  isVip: Boolean(customerFlags.is_vip),
                   isDuplicate,
-                  isRepeat: Boolean(r.customer_flags?.is_repeat),
+                  isRepeat: Boolean(customerFlags.is_repeat),
                   isDispatchStatus,
                   courierFailed,
                   creatorLabel,
@@ -1818,7 +1879,7 @@ function OrdersPage() {
                 };
                 const props = { order: r, flags, actions };
                 const blockReason = norm ? blockedPhones[norm] : undefined;
-                const returnCount = !blockReason ? Number(r.customer_flags?.returned_count ?? 0) : 0;
+                const returnCount = !blockReason ? Number(customerFlags.returned_count ?? 0) : 0;
                 const isReturnCustomer = returnCount > 0 || r.status === "returned";
                 const ringClass = blockReason || isReturnCustomer || isDuplicate
                   ? "rounded-md ring-2 ring-red-500/60"
