@@ -262,13 +262,17 @@ function TelesalesPage() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <Button variant="outline" onClick={() => setImportOpen(true)}>
-              <Upload className="h-4 w-4" /> Import
-            </Button>
-            <Button variant="outline" onClick={() => setAssignOpen(true)}>
-              <UserPlus className="h-4 w-4" /> Assign Customers
-            </Button>
-            <ClearAssignmentsMenu staff={staff} onCleared={reload} />
+            {canManageTele && (
+              <>
+                <Button variant="outline" onClick={() => setImportOpen(true)}>
+                  <Upload className="h-4 w-4" /> Import
+                </Button>
+                <Button variant="outline" onClick={() => setAssignOpen(true)}>
+                  <UserPlus className="h-4 w-4" /> Assign Customers
+                </Button>
+                <ClearAssignmentsMenu staff={staff} onCleared={reload} />
+              </>
+            )}
             <Button asChild>
               <Link to="/orders/new"><Plus className="h-4 w-4" /> New Order</Link>
             </Button>
