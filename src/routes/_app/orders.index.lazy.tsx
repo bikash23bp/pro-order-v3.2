@@ -1766,7 +1766,22 @@ function OrdersPage() {
           </div>
 
           {loading ? (
-            <div className="p-8 text-center text-muted-foreground">Loading…</div>
+            <div className="p-3 sm:p-4 space-y-3 bg-muted/20" aria-label="Loading orders">
+              {Array.from({ length: Math.min(limit, 6) }).map((_, index) => (
+                <div key={index} className="rounded-md border bg-card p-4 space-y-3 animate-pulse">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="h-4 w-36 rounded bg-muted" />
+                    <div className="h-4 w-24 rounded bg-muted" />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="h-10 rounded bg-muted" />
+                    <div className="h-10 rounded bg-muted" />
+                    <div className="h-10 rounded bg-muted" />
+                  </div>
+                  <div className="h-8 rounded bg-muted" />
+                </div>
+              ))}
+            </div>
           ) : listTimedOut ? (
             <div className="p-12 text-center text-muted-foreground space-y-3">
               <div>This filter is taking too long. Try search/date filters or retry.</div>
