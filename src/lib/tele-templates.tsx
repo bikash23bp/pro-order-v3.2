@@ -45,6 +45,7 @@ export type TeleActionKey =
 
 export type TeleRow = {
   id: string;
+  customer_id?: string;
   name: string | null;
   phone: string;
   address: string | null;
@@ -70,6 +71,7 @@ export type TeleTemplateActions = {
   onSaveNote: (id: string, note: string) => Promise<void>;
   onOpenComplaints: (phone: string, name: string | null) => void;
   onOpenReviews: (phone: string, name: string | null, orderId?: string | null) => void;
+  onOpenDuplicates?: (customerId: string, phone: string, name: string | null) => void;
 };
 
 export type TeleTemplateProps = {
@@ -254,14 +256,25 @@ function OrderTakenBadge({ row }: { row: TeleRow }) {
   );
 }
 
-function DuplicateBadge({ row }: { row: TeleRow }) {
+function DuplicateBadge({ row, actions }: { row: TeleRow; actions: TeleTemplateActions }) {
   const n = row.duplicate_count ?? 1;
   if (n <= 1) return null;
+  const clickable = !!(actions.onOpenDuplicates && row.customer_id);
+  const cls = "inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-medium bg-red-500/15 text-red-500 border-red-500/40";
+  if (clickable) {
+    return (
+      <button
+        type="button"
+        className={cls + " hover:bg-red-500/25 cursor-pointer"}
+        title={`Click to see all ${n} assignments`}
+        onClick={(e) => { e.stopPropagation(); actions.onOpenDuplicates!(row.customer_id!, row.phone, row.name); }}
+      >
+        <MessageSquareWarning className="h-3 w-3" /> Duplicate ×{n}
+      </button>
+    );
+  }
   return (
-    <span
-      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-medium bg-red-500/15 text-red-500 border-red-500/40"
-      title={`This customer is assigned ${n} times`}
-    >
+    <span className={cls} title={`This customer is assigned ${n} times`}>
       <MessageSquareWarning className="h-3 w-3" /> Duplicate ×{n}
     </span>
   );
@@ -312,7 +325,7 @@ function NameButton({ row, actions, className = "" }: { row: TeleRow; actions: T
       <span className="shrink-0"><ComplaintBadge row={row} actions={actions} /></span>
       <span className="shrink-0"><TeleReviewBadge row={row} actions={actions} /></span>
       <span className="shrink-0"><OrderTakenBadge row={row} /></span>
-      <span className="shrink-0"><DuplicateBadge row={row} /></span>
+      <span className="shrink-0"><DuplicateBadge row={row} actions={actions} /></span>
     </div>
   );
 }
