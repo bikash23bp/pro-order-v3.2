@@ -1799,7 +1799,13 @@ function OrdersPage() {
           ) : totalCount === 0 ? (
             <div className="p-12 text-center text-muted-foreground">No orders found.</div>
           ) : (
-            <div className="p-3 sm:p-4 space-y-3 bg-muted/20">
+            <div className={`relative p-3 sm:p-4 space-y-3 bg-muted/20 transition-opacity ${refreshing ? "opacity-80" : "opacity-100"}`}>
+              {refreshing && (
+                <div className="sticky top-2 z-[1] ml-auto flex w-fit items-center gap-1.5 rounded-md border bg-card/95 px-2.5 py-1 text-xs text-muted-foreground shadow-sm">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Refreshing…
+                </div>
+              )}
               {paginated.map((r) => {
                 const norm = normalizePhoneClient(r.customer_phone || "");
                 const sourceLabel = r.order_sources?.name ?? r.source ?? null;
