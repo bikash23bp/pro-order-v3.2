@@ -15,6 +15,7 @@ type WooLineItem = {
   price?: number | string;
   total?: string;
   subtotal?: string;
+  meta_data?: Array<{ key?: string; value?: unknown; display_key?: string; display_value?: unknown }>;
 };
 type WooOrder = {
   id: number;
@@ -58,11 +59,41 @@ function extractCustomField(payload: WooOrder): string {
   return typeof v === "string" ? v.trim() : String(v).trim();
 }
 
+function isFragranceKey(rawKey: unknown, rawDisplay: unknown): boolean {
+  const k = String(rawKey ?? "").trim().toLowerCase().replace(/^_+/, "").replace(/^(pa_|attribute_)/, "");
+  const dk = String(rawDisplay ?? "").trim().toLowerCase();
+  return k === "fragrance" || dk === "fragrance" || k.includes("fragrance") || dk.includes("fragrance");
+}
+function metaValueToString(v: unknown): string {
+  if (v == null) return "";
+  if (Array.isArray(v)) return v.map((x) => metaValueToString(x)).filter(Boolean).join(", ");
+  if (typeof v === "object") {
+    const obj = v as Record<string, unknown>;
+    if ("name" in obj || "value" in obj) return metaValueToString(obj.value ?? obj.name);
+  }
+  return String(v).trim();
+}
+function extractFragrances(payload: WooOrder): string[] {
+  const out: string[] = [];
+  const push = (v: unknown) => { const s = metaValueToString(v); if (s) out.push(s); };
+  for (const m of payload.meta_data ?? []) {
+    if (isFragranceKey(m.key, m.display_key)) push(m.display_value ?? m.value);
+  }
+  for (const li of payload.line_items ?? []) {
+    for (const m of li.meta_data ?? []) {
+      if (isFragranceKey(m.key, m.display_key)) push(m.display_value ?? m.value);
+    }
+  }
+  return Array.from(new Set(out));
+}
+
 function buildInvoiceNote(payload: WooOrder): string | null {
   const note = (payload.customer_note ?? "").trim();
   const custom = extractCustomField(payload);
+  const fragrances = extractFragrances(payload);
   const parts: string[] = [];
   if (custom) parts.push(`Custom: ${custom}`);
+  if (fragrances.length) parts.push(`Fragrance: ${fragrances.join(", ")}`);
   if (note) parts.push(note);
   return parts.length ? parts.join(" | ") : null;
 }
