@@ -24,6 +24,8 @@ const PROVIDERS: { id: ProviderId; label: string; defaultUrl: string; multi: boo
   { id: "redx", label: "RedX", defaultUrl: "https://openapi.redx.com.bd/v1.0.0-beta", multi: true },
 ];
 
+const PERSONAL_BACKEND_PUBLISHABLE_KEY = "sb_publishable_UD-P5lLzKAcjeS4PO2UDmQ_wLhlpuqO";
+
 type Row = {
   id?: string;
   name: string;
@@ -357,11 +359,17 @@ function AutoSyncSetupCard() {
   const [appUrl, setAppUrl] = useState(defaultOrigin);
   const [intervalMin, setIntervalMin] = useState(15);
 
+  const publishableKey =
+    (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY) ||
+    (typeof process !== "undefined" && process.env?.VITE_SUPABASE_PUBLISHABLE_KEY) ||
+    (typeof process !== "undefined" && process.env?.SUPABASE_PUBLISHABLE_KEY) ||
+    PERSONAL_BACKEND_PUBLISHABLE_KEY;
+
   const cleanUrl = appUrl.trim().replace(/\/+$/, "");
   const schedule = intervalMin <= 1 ? "* * * * *" : `*/${intervalMin} * * * *`;
 
   const sql = useMemo(() => {
-    return `-- Run this ONCE in your Supabase SQL editor
+    return `-- Run this ONCE in your database SQL editor
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
 
@@ -375,17 +383,17 @@ SELECT cron.schedule(
   $cron$
   SELECT net.http_post(
     url := '${cleanUrl}/api/public/hooks/courier-status-sync',
-    headers := '{"Content-Type": "application/json", "Authorization": "Bearer <YOUR_CRON_SECRET>"}'::jsonb,
+    headers := '{"Content-Type": "application/json", "apikey": "${publishableKey}"}'::jsonb,
     body := '{}'::jsonb
   );
   $cron$
 );`;
-  }, [cleanUrl, intervalMin, schedule]);
+  }, [cleanUrl, intervalMin, publishableKey, schedule]);
 
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(sql);
-      toast.success("SQL copied — paste it in your Supabase SQL editor");
+      toast.success("SQL copied — paste it in your database SQL editor");
     } catch {
       toast.error("Couldn't copy. Select and copy manually.");
     }
