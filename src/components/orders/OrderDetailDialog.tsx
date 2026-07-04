@@ -18,6 +18,7 @@ import { DuplicateBadge } from "@/components/orders/DuplicateBadge";
 import { sendCustomSms } from "@/lib/sms.functions";
 import { getOrderHistory, updateOrderStatusOnly, type OrderHistoryEntry } from "@/lib/order-history.functions";
 import { getOrderCustomFields } from "@/lib/orders-import.functions";
+import { requestSteadfastCancel } from "@/lib/courier.functions";
 import { CopyInvoiceImageButton } from "@/components/orders/CopyInvoiceImageButton";
 import { ForwardOrderDialog } from "@/components/orders/ForwardOrderDialog";
 import { useAuth } from "@/hooks/use-auth";
@@ -123,6 +124,29 @@ export function OrderDetailDialog({ order, onClose, onEdit }: { order: DetailOrd
   const fetchHistory = useServerFn(getOrderHistory);
   const saveStatus = useServerFn(updateOrderStatusOnly);
   const fetchCustomFields = useServerFn(getOrderCustomFields);
+  const cancelCourier = useServerFn(requestSteadfastCancel);
+  const [cancelling, setCancelling] = useState(false);
+
+  const onCancelRequest = async () => {
+    const reason = window.prompt("Reason for cancel request?");
+    if (!reason || !reason.trim()) return;
+    setCancelling(true);
+    try {
+      const res = await cancelCourier({ data: { orderId: order.id, reason: reason.trim() } });
+      if (!res.ok) { toast.error(res.error); return; }
+      toast.success(
+        res.needsCourierCall
+          ? "Cancel requested — please call the courier hotline to confirm"
+          : "Order cancelled",
+      );
+      await loadHistory();
+      onSaved?.();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Cancel failed");
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const loadHistory = async () => {
     setHistoryLoading(true);
