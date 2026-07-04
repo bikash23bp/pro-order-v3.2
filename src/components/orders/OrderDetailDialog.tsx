@@ -140,7 +140,7 @@ export function OrderDetailDialog({ order, onClose, onEdit }: { order: DetailOrd
           : "Order cancelled",
       );
       await loadHistory();
-      onSaved?.();
+      onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Cancel failed");
     } finally {
