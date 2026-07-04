@@ -284,7 +284,12 @@ function SyncCourierStatusButton({ onDone }: { onDone: () => void }) {
     try {
       const r = await sync();
       const msg = `Checked ${r.checked}, updated ${r.updated} (${r.completed} completed, ${r.returned} returned)${r.failed ? ` — ${r.failed} failed` : ""}`;
-      if (r.failed > 0 && r.updated === 0) toast.warning(msg);
+      const errPreview = (r.errors ?? []).slice(0, 3).map((e) => e.error).join(" • ");
+      const description = errPreview
+        ? `${errPreview}${r.errors.length > 3 ? ` (+${r.errors.length - 3} more)` : ""}`
+        : undefined;
+      if (r.failed > 0 && r.updated === 0) toast.warning(msg, { description });
+      else if (r.failed > 0) toast.success(msg, { description });
       else toast.success(msg);
       onDone();
     } catch (e) {
@@ -296,7 +301,7 @@ function SyncCourierStatusButton({ onDone }: { onDone: () => void }) {
   return (
     <Button variant="outline" onClick={run} disabled={busy}>
       {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
-      {busy ? "Checking courier…" : "Sync Courier Status"}
+      {busy ? "Syncing…" : "Sync now"}
     </Button>
   );
 }
