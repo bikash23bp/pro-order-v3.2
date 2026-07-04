@@ -361,7 +361,12 @@ export const assignTelesalesCustomers = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const { data: roleRow } = await supabase
       .from("user_roles").select("role").eq("user_id", userId).maybeSingle();
-    if ((roleRow?.role !== "admin" && roleRow?.role !== "business_owner")) throw new Error("Only admins can assign customers");
+    const isPrivileged = roleRow?.role === "admin" || roleRow?.role === "business_owner";
+    if (!isPrivileged) {
+      const { data: perms } = await supabase
+        .from("user_permissions").select("can_manage_telesales").eq("user_id", userId).maybeSingle();
+      if (!perms?.can_manage_telesales) throw new Error("You do not have permission to assign telesales customers");
+    }
 
     // Always insert NEW assignments — duplicates are allowed (same customer
     // to multiple users, or even to the same user again).
@@ -404,7 +409,12 @@ export const reassignTelesalesAssignment = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const { data: roleRow } = await supabase
       .from("user_roles").select("role").eq("user_id", userId).maybeSingle();
-    if ((roleRow?.role !== "admin" && roleRow?.role !== "business_owner")) throw new Error("Only admins can reassign customers");
+    const isPrivileged = roleRow?.role === "admin" || roleRow?.role === "business_owner";
+    if (!isPrivileged) {
+      const { data: perms } = await supabase
+        .from("user_permissions").select("can_manage_telesales").eq("user_id", userId).maybeSingle();
+      if (!perms?.can_manage_telesales) throw new Error("You do not have permission to reassign telesales customers");
+    }
 
     const { error } = await supabase
       .from("telesales_assignments")

@@ -3325,6 +3325,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      has_permission: {
+        Args: { _perm: string; _user_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
