@@ -375,7 +375,7 @@ SELECT cron.schedule(
   $cron$
   SELECT net.http_post(
     url := '${cleanUrl}/api/public/hooks/courier-status-sync',
-    headers := '{"Content-Type": "application/json"}'::jsonb,
+    headers := '{"Content-Type": "application/json", "Authorization": "Bearer <YOUR_CRON_SECRET>"}'::jsonb,
     body := '{}'::jsonb
   );
   $cron$
