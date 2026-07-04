@@ -54,6 +54,44 @@ function wooCustomFieldValue(o: { meta_data?: Array<{ key?: string; value?: unkn
   return typeof v === "string" ? v.trim() : String(v).trim();
 }
 
+// Collect all "Fragrance" values from order-level meta_data AND every
+// line_item.meta_data. Case-insensitive, tolerates leading underscores and
+// pa_/attribute_ prefixes commonly emitted by WooCommerce/product-addons.
+function isFragranceKey(rawKey: unknown, rawDisplay: unknown): boolean {
+  const k = String(rawKey ?? "").trim().toLowerCase().replace(/^_+/, "").replace(/^(pa_|attribute_)/, "");
+  const dk = String(rawDisplay ?? "").trim().toLowerCase();
+  return k === "fragrance" || dk === "fragrance" || k.includes("fragrance") || dk.includes("fragrance");
+}
+function metaValueToString(v: unknown): string {
+  if (v == null) return "";
+  if (Array.isArray(v)) return v.map((x) => metaValueToString(x)).filter(Boolean).join(", ");
+  if (typeof v === "object") {
+    const obj = v as Record<string, unknown>;
+    if ("name" in obj || "value" in obj) return metaValueToString(obj.value ?? obj.name);
+  }
+  return String(v).trim();
+}
+export function wooFragranceValues(o: {
+  meta_data?: Array<{ key?: string; value?: unknown; display_key?: string; display_value?: unknown }>;
+  line_items?: Array<{ meta_data?: Array<{ key?: string; value?: unknown; display_key?: string; display_value?: unknown }> }>;
+}): string[] {
+  const out: string[] = [];
+  const push = (v: unknown) => {
+    const s = metaValueToString(v);
+    if (s) out.push(s);
+  };
+  for (const m of o.meta_data ?? []) {
+    if (isFragranceKey(m.key, m.display_key)) push(m.display_value ?? m.value);
+  }
+  for (const li of o.line_items ?? []) {
+    for (const m of li.meta_data ?? []) {
+      if (isFragranceKey(m.key, m.display_key)) push(m.display_value ?? m.value);
+    }
+  }
+  // De-duplicate while preserving order.
+  return Array.from(new Set(out));
+}
+
 function normalizePhone(raw: string | undefined | null): string | null {
   const digits = (raw || "").replace(/[^0-9]/g, "");
   const tail = digits.slice(-11);
@@ -107,8 +145,10 @@ async function deleteObsoleteIncompleteOrders(
 export function wooInvoiceNote(o: { customer_note?: string | null; meta_data?: Array<{ key?: string; value?: unknown; display_key?: string; display_value?: unknown }> }): string | null {
   const note = (o.customer_note ?? "").trim();
   const custom = wooCustomFieldValue(o);
+  const fragrances = wooFragranceValues(o as Parameters<typeof wooFragranceValues>[0]);
   const parts: string[] = [];
   if (custom) parts.push(`Custom: ${custom}`);
+  if (fragrances.length) parts.push(`Fragrance: ${fragrances.join(", ")}`);
   if (note) parts.push(note);
   return parts.length ? parts.join(" | ") : null;
 }
