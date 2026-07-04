@@ -129,8 +129,10 @@ export async function syncOneOrder(supabase: Sb, orderId: string): Promise<SyncR
   if (error) return { orderId, ok: false, changed: false, error: error.message };
   if (!order) return { orderId, ok: false, changed: false, error: "Order not found" };
 
-  if (order.status !== "shipped") {
-    return { orderId, ok: true, changed: false, oldStatus: order.status, error: "Order is not in shipped status" };
+  // Sync any order currently with the courier — shipped, ready_to_ship, or awaiting cancellation.
+  const SYNCABLE = ["shipped", "ready_to_ship", "cancel_request"] as const;
+  if (!SYNCABLE.includes(order.status as (typeof SYNCABLE)[number])) {
+    return { orderId, ok: true, changed: false, oldStatus: order.status, error: `Order status "${order.status}" not syncable` };
   }
   if (!order.consignment_id) {
     return { orderId, ok: false, changed: false, oldStatus: order.status, error: "Order has no consignment_id" };
@@ -231,7 +233,7 @@ export async function syncAllShippedOrders(supabase: Sb): Promise<BulkSyncSummar
   const { data: orders, error } = await supabase
     .from("orders")
     .select("id")
-    .eq("status", "shipped")
+    .in("status", ["shipped", "ready_to_ship", "cancel_request"])
     .not("consignment_id", "is", null)
     .order("updated_at", { ascending: false })
     .limit(100);
