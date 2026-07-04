@@ -7,6 +7,11 @@ const getAdmin = async () => (await import("@/integrations/supabase/client.serve
 
 const Input = z.object({ orderId: z.string().uuid() });
 
+const CancelInput = z.object({
+  orderId: z.string().uuid(),
+  reason: z.string().trim().min(1, "Reason required").max(500),
+});
+
 type SteadfastResp = {
   status?: number;
   message?: string;
@@ -119,5 +124,64 @@ export const pushToSteadfast = createServerFn({ method: "POST" })
       consignmentId,
       trackingUrl,
       message: json.message ?? "Order pushed to Steadfast",
+    };
+  });
+
+/**
+ * Request cancellation of a Steadfast order.
+ * Steadfast's public API has no cancel endpoint — we mark the order locally
+ * so operations can call the courier hotline. Behaviour:
+ *   - No consignment yet → status = "cancelled" (nothing shipped)
+ *   - Already has consignment → status = "cancel_request" (needs courier call)
+ * The reason is appended to internal_note and a `cancel_requested` event is
+ * logged to order_history. Status change itself is auto-logged by the
+ * `orders_log_history_trg` trigger.
+ */
+export const requestSteadfastCancel = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => CancelInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+
+    const { data: order, error: orderErr } = await supabase
+      .from("orders")
+      .select("id, status, consignment_id, internal_note")
+      .eq("id", data.orderId)
+      .maybeSingle();
+    if (orderErr) return { ok: false as const, error: orderErr.message };
+    if (!order) return { ok: false as const, error: "Order not found" };
+    if (order.status === "cancelled" || order.status === "returned" || order.status === "completed") {
+      return { ok: false as const, error: `Order already ${order.status}` };
+    }
+
+    const nextStatus = order.consignment_id ? "cancel_request" : "cancelled";
+    const stamp = new Date().toISOString();
+    const noteLine = `[${stamp}] Cancel requested: ${data.reason}`;
+    const mergedNote = order.internal_note ? `${order.internal_note}\n${noteLine}` : noteLine;
+
+    const { error: updErr } = await supabase
+      .from("orders")
+      .update({
+        status: nextStatus,
+        internal_note: mergedNote,
+        updated_by: userId,
+        updated_at: stamp,
+      })
+      .eq("id", data.orderId);
+    if (updErr) return { ok: false as const, error: updErr.message };
+
+    // Explicit cancel_requested event on top of the auto status_changed one
+    await supabase.from("order_history").insert({
+      order_id: data.orderId,
+      changed_by: userId,
+      event_type: "cancel_requested",
+      from_value: order.status,
+      to_value: data.reason.slice(0, 500),
+    });
+
+    return {
+      ok: true as const,
+      status: nextStatus,
+      needsCourierCall: !!order.consignment_id,
     };
   });
