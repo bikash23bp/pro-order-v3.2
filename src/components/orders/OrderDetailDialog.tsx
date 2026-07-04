@@ -445,6 +445,18 @@ export function OrderDetailDialog({ order, onClose, onEdit }: { order: DetailOrd
               <Button size="sm" variant="outline" onClick={() => setSmsOpen(true)}>
                 <Send className="h-4 w-4" /> Send SMS
               </Button>
+              {order.status !== "cancelled" && order.status !== "returned" && order.status !== "completed" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onCancelRequest}
+                  disabled={cancelling}
+                  className="text-red-600 hover:text-red-700"
+                >
+                  {cancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldAlert className="h-4 w-4" />}
+                  {order.consignment_id ? "Request Cancel" : "Cancel Order"}
+                </Button>
+              )}
             </div>
           </section>
 
