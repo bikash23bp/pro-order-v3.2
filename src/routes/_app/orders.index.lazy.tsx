@@ -325,6 +325,10 @@ function OrdersPage() {
     all: CountBucket; web: CountBucket; facebook: CountBucket; preorder: CountBucket; partner?: CountBucket;
   };
   const [debouncedQ, setDebouncedQ] = useState("");
+  // Separately debounced query for the tab-counts RPC, which runs an exact
+  // COUNT/SUM aggregation over the entire matched set. We let list results
+  // update quickly but keep the counts request rarer.
+  const [countsDebouncedQ, setCountsDebouncedQ] = useState("");
   const [viewing, setViewing] = useState<Order | null>(null);
   const [profilePhone, setProfilePhone] = useState<string | null>(null);
   const [editing, setEditing] = useState<EditableOrder | null>(null);
@@ -434,10 +438,28 @@ function OrdersPage() {
   }, [session, search.dup, fetchDupes, getFilterOptions, fetchSites]);
 
   // Debounce search input — avoid refetch on every keystroke.
+  // Also skip filtering when the term is too short to be selective
+  // (pg_trgm indexes don't help for 1-char queries and short digit-runs
+  // match too many rows). In that case treat the search as empty.
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedQ(q.trim()), 350);
+    const t = setTimeout(() => {
+      const raw = q.trim();
+      if (!raw) { setDebouncedQ(""); return; }
+      const s = toAsciiDigits(raw);
+      const digits = s.replace(/\D/g, "");
+      const isAllDigits = digits.length === s.length;
+      const passes = isAllDigits ? digits.length >= 3 : s.length >= 2;
+      setDebouncedQ(passes ? raw : "");
+    }, 350);
     return () => clearTimeout(t);
   }, [q]);
+
+  // Slower debounce for the exact-count RPC so typing doesn't refire the
+  // aggregation on every keystroke; keepPreviousData keeps the pills stable.
+  useEffect(() => {
+    const t = setTimeout(() => setCountsDebouncedQ(debouncedQ), 500);
+    return () => clearTimeout(t);
+  }, [debouncedQ]);
 
   // Fetch tag→phone map lazily, only when a tag filter is active (and once per tag).
   useEffect(() => {
