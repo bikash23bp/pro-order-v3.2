@@ -744,9 +744,9 @@ function OrdersPage() {
     () => [
       "orders", "counts",
       { source: sourceFilter, site: siteFilter, courier: courierFilter, partner: partnerFilter, staff: staffFilter, preset: datePreset,
-        from: fromIso, to: toIso, q: debouncedQ, tagPhones: tagPhoneFilter, advanceOnly },
+        from: fromIso, to: toIso, q: countsDebouncedQ, tagPhones: tagPhoneFilter, advanceOnly },
     ],
-    [sourceFilter, siteFilter, courierFilter, partnerFilter, staffFilter, datePreset, fromIso, toIso, debouncedQ, tagPhoneFilter, advanceOnly],
+    [sourceFilter, siteFilter, courierFilter, partnerFilter, staffFilter, datePreset, fromIso, toIso, countsDebouncedQ, tagPhoneFilter, advanceOnly],
   );
 
   const countsQuery = useQuery({
@@ -767,7 +767,7 @@ function OrdersPage() {
         partner: partnerFilter, staff: staffFilter,
         from: datePreset === "all" ? null : fromIso,
         to: datePreset === "all" ? null : toIso,
-        q: debouncedQ,
+        q: countsDebouncedQ,
         tagPhones: tagPhoneFilter,
         advanceOnly,
       } }) as { tabCountsData: TabCountsData | null; preorderDueCount: number; timedOut?: boolean; error?: string };
