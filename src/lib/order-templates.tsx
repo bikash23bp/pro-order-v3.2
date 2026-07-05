@@ -97,6 +97,7 @@ export type OrderForTemplate = {
     products: { name: string; image_url?: string | null } | null;
     product_variants?: { image_url: string | null; attributes: Record<string, string> | null } | null;
   }> | null;
+  order_items_count?: number | null;
   review_summary?: { count: number; avg: number } | null;
 };
 
@@ -261,7 +262,8 @@ function CustomerBadges({ order, flags, actions }: OrderTemplateProps) {
 }
 
 function ItemsList({ order, dense = false }: { order: OrderForTemplate; dense?: boolean }) {
-  const items = order.order_items ?? [];
+  const items = (order.order_items ?? []).slice(0, 2);
+  const totalItems = Number(order.order_items_count ?? order.order_items?.length ?? 0) || 0;
   if (items.length === 0) return null;
   const size = dense ? "h-8 w-8" : "h-10 w-10";
   const pxBase = dense ? 32 : 40; // matches Tailwind h/w
@@ -317,6 +319,11 @@ function ItemsList({ order, dense = false }: { order: OrderForTemplate; dense?: 
           </div>
         );
       })}
+      {totalItems > items.length && (
+        <div className="text-[11px] text-muted-foreground pl-0.5">
+          +{totalItems - items.length} more item{totalItems - items.length > 1 ? "s" : ""}
+        </div>
+      )}
     </div>
   );
 }
@@ -520,7 +527,10 @@ function DesktopCardCompact(p: OrderTemplateProps) {
         <div className="text-[11px] text-muted-foreground flex items-center gap-2 mt-0.5 min-w-0">
           <span className="shrink-0">{order.customer_phone}</span>
           <span className="shrink-0">·</span>
-          <span className="truncate">{(order.order_items ?? []).map(i => `${i.products?.name ?? "—"} ×${i.quantity}`).join(", ")}</span>
+          <span className="truncate">
+            {(order.order_items ?? []).slice(0, 2).map(i => `${i.products?.name ?? "—"} ×${i.quantity}`).join(", ")}
+            {Number(order.order_items_count ?? order.order_items?.length ?? 0) > (order.order_items?.length ?? 0) && ` +${Number(order.order_items_count ?? 0) - (order.order_items?.length ?? 0)}`}
+          </span>
         </div>
         <div className="mt-1">
           <PlainNoteBlock order={order} actions={actions} />
@@ -551,7 +561,7 @@ function DesktopTableClassic(p: OrderTemplateProps) {
       </div>
       <div className="min-w-0 text-xs text-muted-foreground truncate">
         {(order.order_items ?? []).slice(0, 2).map((i) => `${i.products?.name ?? "—"} ×${i.quantity}`).join(", ")}
-        {(order.order_items?.length ?? 0) > 2 && ` +${(order.order_items?.length ?? 0) - 2}`}
+        {Number(order.order_items_count ?? order.order_items?.length ?? 0) > (order.order_items?.length ?? 0) && ` +${Number(order.order_items_count ?? 0) - (order.order_items?.length ?? 0)}`}
       </div>
       <div className="text-[11px] text-muted-foreground">
         {formatOrderDate(order.created_at)}
@@ -660,7 +670,7 @@ function DesktopMinimalLine(p: OrderTemplateProps) {
           <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
             {formatOrderDate(order.created_at)} · {flags.creatorLabel}
             {flags.editorLabel && <span> · ✎ {flags.editorLabel}</span>}
-            {(order.order_items?.length ?? 0) > 0 && ` · ${order.order_items?.length} item(s)`}
+            {Number(order.order_items_count ?? order.order_items?.length ?? 0) > 0 && ` · ${Number(order.order_items_count ?? order.order_items?.length ?? 0)} item(s)`}
           </div>
         </div>
         <StatusSelect order={order} actions={actions} size="sm" />

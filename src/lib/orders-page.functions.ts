@@ -21,9 +21,8 @@ const OrdersInput = z.object({
 
 type CountBucket = { count: number; amount: number };
 
-const ORDER_ITEMS_EMBED = "order_items(quantity, unit_price, products(name, image_url), product_variants(attributes, image_url))";
-const ORDER_LIST_SELECT = `id, order_number, invoice_number, customer_name, customer_phone, customer_email, customer_address, status, total_amount, delivery_charge, discount_amount, advance_amount, advance_source_id, advance_txn_id, subtotal, created_at, updated_at, consignment_id, tracking_url, invoice_note, internal_note, courier_id, order_source_id, source, preorder, preorder_date, customer_type, created_by, updated_by, oms_sender_name, oms_sender_order_no, source_site_id, is_paid_marketing, forwarded_to_partner_at, order_sources(name), ${ORDER_ITEMS_EMBED}`;
-const ORDER_LIST_SELECT_LEGACY = `id, order_number, invoice_number, customer_name, customer_phone, customer_email, customer_address, status, total_amount, delivery_charge, discount_amount, advance_amount, advance_source_id, advance_txn_id, subtotal, created_at, updated_at, consignment_id, tracking_url, invoice_note, internal_note, courier_id, order_source_id, source, preorder, preorder_date, customer_type, created_by, updated_by, oms_sender_name, oms_sender_order_no, source_site_id, is_paid_marketing, order_sources(name), ${ORDER_ITEMS_EMBED}`;
+const ORDER_LIST_SELECT = "id, order_number, invoice_number, customer_name, customer_phone, customer_email, customer_address, status, total_amount, delivery_charge, discount_amount, advance_amount, advance_source_id, advance_txn_id, subtotal, created_at, updated_at, consignment_id, tracking_url, invoice_note, internal_note, courier_id, order_source_id, source, preorder, preorder_date, customer_type, created_by, updated_by, oms_sender_name, oms_sender_order_no, source_site_id, is_paid_marketing, forwarded_to_partner_at, order_sources(name)";
+const ORDER_LIST_SELECT_LEGACY = "id, order_number, invoice_number, customer_name, customer_phone, customer_email, customer_address, status, total_amount, delivery_charge, discount_amount, advance_amount, advance_source_id, advance_txn_id, subtotal, created_at, updated_at, consignment_id, tracking_url, invoice_note, internal_note, courier_id, order_source_id, source, preorder, preorder_date, customer_type, created_by, updated_by, oms_sender_name, oms_sender_order_no, source_site_id, is_paid_marketing, order_sources(name)";
 const OMS_SENDERS_CACHE_TTL_MS = 25_000;
 const omsSendersCache = new Map<string, { expiresAt: number; promise: Promise<string[] | null> }>();
 const ACTIVE_ORDER_STATUSES = new Set([
@@ -101,6 +100,22 @@ function emptyTabCountsData() {
     partner: emptyBucket(),
     preorder: emptyBucket(),
   };
+}
+
+function hasLiveCountFilters(data: Omit<z.infer<typeof OrdersInput>, "status" | "page" | "limit">, omsAllowed: string[] | null) {
+  return Boolean(
+    (data.source && data.source !== "all")
+      || (data.site && data.site !== "all")
+      || (data.courier && data.courier !== "all")
+      || (data.partner && data.partner !== "all")
+      || (data.staff && data.staff !== "all")
+      || data.from
+      || data.to
+      || data.q?.trim()
+      || data.tagPhones !== null && data.tagPhones !== undefined
+      || data.advanceOnly
+      || omsAllowed !== null,
+  );
 }
 
 function isStatementTimeout(error: { message?: string | null; details?: string | null; code?: string | null } | null | undefined) {
@@ -304,16 +319,20 @@ async function enrichOrdersForList(context: any, orders: any[]) {
     ...orders.map((o: any) => o.updated_by).filter(Boolean),
   ]));
   const siteIds = Array.from(new Set(orders.map((o: any) => o.source_site_id).filter(Boolean))) as string[];
+  const orderIds = orders.map((o: any) => o.id).filter(Boolean) as string[];
 
   // Keep the main order-list path light: only fetch data needed to render the
   // card shell. Duplicate/VIP/return flags are loaded by getOrderListFlags in a
   // separate background query so they don't block the first card paint.
-  const [profileRes, siteRes] = await Promise.all([
+  const [profileRes, siteRes, previewRes] = await Promise.all([
     userIds.length
       ? context.supabase.from("profiles").select("id, full_name, email").in("id", userIds)
       : Promise.resolve({ data: [] }),
     siteIds.length
       ? context.supabase.from("integrations").select("id, name, site_url").in("id", siteIds)
+      : Promise.resolve({ data: [] }),
+    orderIds.length
+      ? (context.supabase as any).rpc("get_order_item_previews_v1", { p_order_ids: orderIds })
       : Promise.resolve({ data: [] }),
   ]);
 
@@ -325,10 +344,34 @@ async function enrichOrdersForList(context: any, orders: any[]) {
     s.id,
     s.name || (s.site_url ? String(s.site_url).replace(/^https?:\/\//, "").replace(/\/+$/, "") : null),
   ]));
+  let previewRows = previewRes.error ? [] : (previewRes.data ?? []);
+  if (previewRes.error && orderIds.length) {
+    const fallback = await context.supabase
+      .from("order_items")
+      .select("order_id, quantity, products(name)")
+      .in("order_id", orderIds)
+      .order("created_at", { ascending: true });
+    if (!fallback.error) {
+      const grouped = new Map<string, { item_count: number; preview_items: any[] }>();
+      for (const item of fallback.data ?? []) {
+        const orderId = (item as any).order_id as string;
+        const bucket = grouped.get(orderId) ?? { item_count: 0, preview_items: [] };
+        bucket.item_count += 1;
+        if (bucket.preview_items.length < 2) {
+          bucket.preview_items.push({ quantity: (item as any).quantity, products: (item as any).products ?? null });
+        }
+        grouped.set(orderId, bucket);
+      }
+      previewRows = Array.from(grouped, ([order_id, value]) => ({ order_id, ...value }));
+    }
+  }
+  const previewMap = new Map(previewRows.map((r: any) => [r.order_id, Array.isArray(r.preview_items) ? r.preview_items : []]));
+  const itemCountMap = new Map(previewRows.map((r: any) => [r.order_id, Number(r.item_count ?? 0)]));
 
   return orders.map((o: any) => ({
     ...o,
-    order_items: Array.isArray(o.order_items) ? o.order_items : [],
+    order_items: previewMap.get(o.id) ?? [],
+    order_items_count: itemCountMap.get(o.id) ?? 0,
     creator: o.created_by ? (profileMap[o.created_by] ?? null) : null,
     editor: o.updated_by ? (profileMap[o.updated_by] ?? null) : null,
     site_name: o.source_site_id ? (siteMap[o.source_site_id] ?? null) : null,
@@ -390,6 +433,23 @@ export const getOrderCountsPage = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => OrdersInput.omit({ status: true, page: true, limit: true }).parse(input ?? {}))
   .handler(async ({ data, context }) => {
     const omsAllowed = await getAllowedOmsSenders(context);
+    if (!hasLiveCountFilters(data, omsAllowed)) {
+      const { data: summary, error: summaryError } = await (context.supabase as any).rpc("get_order_counts_summary_v1");
+      if (!summaryError && summary && typeof summary === "object") {
+        const today = new Date().toISOString().slice(0, 10);
+        const { count, error: dueError } = await context.supabase.from("orders").select("id", { count: "exact", head: true }).eq("preorder", true).not("preorder_date", "is", null).lte("preorder_date", today);
+        const preorderDueCount = dueError && isStatementTimeout(dueError) ? 0 : (count ?? 0);
+        const normalized = {
+          ...(summary as Record<string, unknown>),
+          sent_to_partner: (summary as { sent_to_partner?: CountBucket }).sent_to_partner ?? { count: 0, amount: 0 },
+          byStatus: {
+            ...(((summary as { byStatus?: Record<string, unknown> }).byStatus) ?? {}),
+            incomplete: ((summary as { byStatus?: Record<string, unknown> }).byStatus?.incomplete) ?? { count: 0, amount: 0 },
+          },
+        };
+        return { tabCountsData: normalized, preorderDueCount };
+      }
+    }
     const countArgs: any = {
       p_source: data.source === "all" ? null : data.source,
       p_site: data.site === "all" ? null : data.site,
@@ -417,8 +477,8 @@ export const getOrderCountsPage = createServerFn({ method: "POST" })
     const today = new Date().toISOString().slice(0, 10);
     const { count, error: dueError } = await context.supabase.from("orders").select("id", { count: "exact", head: true }).eq("preorder", true).not("preorder_date", "is", null).lte("preorder_date", today);
     const preorderDueCount = dueError && isStatementTimeout(dueError) ? 0 : (count ?? 0);
-    // Sent-to-Partner tab: count-only on purpose; pulling every forwarded row just to sum
-    // totals made the order page slow on large datasets.
+    // Sent-to-Partner tab: live fallback only for filtered counts. Filterless
+    // counts are served from order_status_counts above.
     let sentToPartnerBucket: { count: number; amount: number } = { count: 0, amount: 0 };
     try {
       let stp: any = context.supabase

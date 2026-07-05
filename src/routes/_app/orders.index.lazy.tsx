@@ -123,6 +123,7 @@ type Order = {
     products: { name: string; image_url?: string | null } | null;
     product_variants?: { image_url: string | null; attributes: Record<string, string> | null } | null;
   }> | null;
+  order_items_count?: number | null;
 };
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
@@ -210,6 +211,8 @@ const TAB_STATUSES: TabDef[] = [
 // from a previous cached tab.
 const ORDER_LIST_STALE_MS = 30_000; // 30 seconds — realtime keeps it fresh
 const ORDER_LIST_GC_MS = 24 * 60 * 60_000;     // 24 hour cache retention
+const REALTIME_LIST_REFRESH_COOLDOWN_MS = 4_000;
+const REALTIME_COUNTS_REFRESH_COOLDOWN_MS = 20_000;
 const transientOrderLoadRetry = (failureCount: number, error: unknown) => {
   const message = error instanceof Error ? error.message : String(error ?? "");
   if (/unauthorized|forbidden|invalid token/i.test(message)) return false;
@@ -770,7 +773,7 @@ function OrdersPage() {
         q: countsDebouncedQ,
         tagPhones: tagPhoneFilter,
         advanceOnly,
-      } }) as { tabCountsData: TabCountsData | null; preorderDueCount: number; timedOut?: boolean; error?: string };
+      } }) as unknown as { tabCountsData: TabCountsData | null; preorderDueCount: number; timedOut?: boolean; error?: string };
     },
   });
 
@@ -824,14 +827,32 @@ function OrdersPage() {
     setSelected(new Set());
   }, [statusFilter, page, sourceFilter, siteFilter, courierFilter, datePreset, debouncedQ, tagFilter, advanceOnly]);
 
-  // Realtime — list and tab counters are refreshed together immediately so the
-  // selected tab never drifts away from the visible order cards.
+  // Realtime — collapse noisy order/order_item bursts. The visible list can
+  // refetch occasionally; tab counts are invalidated much less frequently so
+  // heavy exact-count fallbacks don't run for every webhook/user write.
   useEffect(() => {
     if (!session) return;
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let countsTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastListRefreshAt = 0;
+    let lastCountsRefreshAt = 0;
     const refreshOrdersNow = () => {
       if (refreshTimer) clearTimeout(refreshTimer);
-      refreshTimer = setTimeout(() => { void refetchAll(false, false); }, 100);
+      const now = Date.now();
+      const wait = Math.max(250, REALTIME_LIST_REFRESH_COOLDOWN_MS - (now - lastListRefreshAt));
+      refreshTimer = setTimeout(() => {
+        lastListRefreshAt = Date.now();
+        void queryClient.invalidateQueries({ queryKey: ["orders", "list"], refetchType: "active" });
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("orders:changed"));
+        }
+      }, wait);
+      if (countsTimer) clearTimeout(countsTimer);
+      const countsWait = Math.max(1_000, REALTIME_COUNTS_REFRESH_COOLDOWN_MS - (now - lastCountsRefreshAt));
+      countsTimer = setTimeout(() => {
+        lastCountsRefreshAt = Date.now();
+        void queryClient.invalidateQueries({ queryKey: ["orders", "counts"], refetchType: "active" });
+      }, countsWait);
     };
     const channel = supabase
       .channel("orders-list-sync")
@@ -850,9 +871,10 @@ function OrdersPage() {
       .subscribe();
     return () => {
       if (refreshTimer) clearTimeout(refreshTimer);
+      if (countsTimer) clearTimeout(countsTimer);
       supabase.removeChannel(channel);
     };
-  }, [session, refetchAll]);
+  }, [session, queryClient]);
 
 
   const matchesTab = (r: Order, tab: string) => {
