@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS idx_user_site_access_user_site ON public.user_site_access (user_id, site_id);
