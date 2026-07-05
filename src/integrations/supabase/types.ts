@@ -1317,6 +1317,30 @@ export type Database = {
         }
         Relationships: []
       }
+      order_status_counts: {
+        Row: {
+          bucket_key: string
+          bucket_type: string
+          order_count: number
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          bucket_key: string
+          bucket_type: string
+          order_count?: number
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          bucket_key?: string
+          bucket_type?: string
+          order_count?: number
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       orders: {
         Row: {
           advance_amount: number
@@ -2986,12 +3010,28 @@ export type Database = {
     }
     Functions: {
       admin_lock_user_screen: { Args: { target: string }; Returns: undefined }
+      apply_order_status_count_delta: {
+        Args: {
+          p_delta: number
+          p_order: Database["public"]["Tables"]["orders"]["Row"]
+        }
+        Returns: undefined
+      }
       bulk_update_order_status: {
         Args: {
           p_ids: string[]
           p_status: Database["public"]["Enums"]["order_status"]
         }
         Returns: number
+      }
+      bump_order_status_count: {
+        Args: {
+          p_amount_delta: number
+          p_bucket_key: string
+          p_bucket_type: string
+          p_count_delta: number
+        }
+        Returns: undefined
       }
       can_view_all_orders: { Args: { _uid: string }; Returns: boolean }
       check_user_limit: {
@@ -3237,9 +3277,18 @@ export type Database = {
         Args: { p_from: string; p_to: string }
         Returns: Json
       }
+      get_order_counts_summary_v1: { Args: never; Returns: Json }
       get_order_customer_flags_v1: {
         Args: { p_emails?: string[]; p_phones?: string[] }
         Returns: Json
+      }
+      get_order_item_previews_v1: {
+        Args: { p_order_ids: string[] }
+        Returns: {
+          item_count: number
+          order_id: string
+          preview_items: Json
+        }[]
       }
       get_order_tab_counts:
         | {
@@ -3382,6 +3431,7 @@ export type Database = {
       }
       next_unique_order_number: { Args: never; Returns: number }
       normalize_phone: { Args: { p_phone: string }; Returns: string }
+      refresh_order_status_counts: { Args: never; Returns: undefined }
       search_task_customers: {
         Args: { p_query: string }
         Returns: {
