@@ -31,10 +31,26 @@ export function GlobalSearch() {
   const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const reqIdRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Skip network calls when the query is too short to be selective (pg_trgm
+  // indexes don't help for 1-char queries, and short digit-runs match too much).
+  const passesSearchGate = (raw: string): boolean => {
+    const s = toAsciiDigits(raw).trim();
+    if (!s) return false;
+    const digits = s.replace(/\D/g, "");
+    if (digits.length === s.length) return digits.length >= 3; // pure-digit input
+    return s.length >= 2;
+  };
 
   useEffect(() => {
     const termRaw = q.trim();
     if (!termRaw) { setHits([]); setOpen(false); return; }
+    if (!passesSearchGate(termRaw)) {
+      // Keep prior hits mounted but don't fire a new request.
+      setLoading(false);
+      return;
+    }
     const term = toAsciiDigits(termRaw);
     setLoading(true);
     const myReqId = ++reqIdRef.current;
@@ -54,14 +70,20 @@ export function GlobalSearch() {
         filters.push(`customer_phone.ilike.%${needle}%`);
         if (digits.length <= 9) filters.push(`order_number.eq.${parseInt(digits, 10)}`);
       }
-      const { data } = await supabase
+      // Cancel any prior in-flight request so the server can stop working on it.
+      abortRef.current?.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
+      const { data, error } = await supabase
         .from("orders")
         .select("id, order_number, customer_name, customer_phone, customer_address, status, total_amount, created_at, order_sources(name), order_items(quantity, products(name))")
         .or(filters.join(","))
         .order("created_at", { ascending: false })
-        .limit(8);
+        .limit(8)
+        .abortSignal(ac.signal);
       // Ignore stale responses that resolved after a newer query started.
       if (myReqId !== reqIdRef.current) return;
+      if (error) { setLoading(false); return; }
       setHits((data ?? []) as unknown as Hit[]);
       setLoading(false);
       setOpen(true);
@@ -70,6 +92,7 @@ export function GlobalSearch() {
       clearTimeout(t);
       // Invalidate any in-flight request from this effect run.
       reqIdRef.current++;
+      abortRef.current?.abort();
     };
   }, [q]);
 
