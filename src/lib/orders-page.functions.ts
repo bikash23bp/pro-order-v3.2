@@ -344,7 +344,27 @@ async function enrichOrdersForList(context: any, orders: any[]) {
     s.id,
     s.name || (s.site_url ? String(s.site_url).replace(/^https?:\/\//, "").replace(/\/+$/, "") : null),
   ]));
-  const previewRows = previewRes.error ? [] : (previewRes.data ?? []);
+  let previewRows = previewRes.error ? [] : (previewRes.data ?? []);
+  if (previewRes.error && orderIds.length) {
+    const fallback = await context.supabase
+      .from("order_items")
+      .select("order_id, quantity, products(name)")
+      .in("order_id", orderIds)
+      .order("created_at", { ascending: true });
+    if (!fallback.error) {
+      const grouped = new Map<string, { item_count: number; preview_items: any[] }>();
+      for (const item of fallback.data ?? []) {
+        const orderId = (item as any).order_id as string;
+        const bucket = grouped.get(orderId) ?? { item_count: 0, preview_items: [] };
+        bucket.item_count += 1;
+        if (bucket.preview_items.length < 2) {
+          bucket.preview_items.push({ quantity: (item as any).quantity, products: (item as any).products ?? null });
+        }
+        grouped.set(orderId, bucket);
+      }
+      previewRows = Array.from(grouped, ([order_id, value]) => ({ order_id, ...value }));
+    }
+  }
   const previewMap = new Map(previewRows.map((r: any) => [r.order_id, Array.isArray(r.preview_items) ? r.preview_items : []]));
   const itemCountMap = new Map(previewRows.map((r: any) => [r.order_id, Number(r.item_count ?? 0)]));
 
