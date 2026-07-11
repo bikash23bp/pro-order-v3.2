@@ -152,12 +152,12 @@ async function computeAllowedOmsSenders(ctx: { supabase: any; userId: string }):
       .select("role")
       .eq("user_id", ctx.userId)
       .in("role", ["admin", "business_owner"]),
-    ctx.supabase.from("profiles").select("permissions").eq("id", ctx.userId).maybeSingle(),
+    ctx.supabase.from("user_permissions").select("can_view_all_orders").eq("user_id", ctx.userId).maybeSingle(),
     (ctx.supabase as any).from("user_oms_access").select("sender_name").eq("user_id", ctx.userId),
   ]);
   const roles = new Set(((rolesRes.data ?? []) as { role: string }[]).map((r) => r.role));
   if (roles.has("admin") || roles.has("business_owner")) return null;
-  if ((profileRes.data?.permissions as any)?.can_view_all_orders) return null;
+  if (profileRes.data?.can_view_all_orders) return null;
   return ((accessRes.data ?? []) as { sender_name: string }[]).map((r) => r.sender_name);
 }
 
