@@ -508,6 +508,7 @@ function TelesalesPage() {
           info={dupFor}
           onClose={() => setDupFor(null)}
           onChanged={reload}
+          isAdmin={isAdmin}
         />
       )}
     </div>
