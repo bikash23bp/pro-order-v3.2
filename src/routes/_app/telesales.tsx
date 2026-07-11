@@ -675,6 +675,7 @@ function ClearAssignmentsMenu({
   };
 
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" disabled={pending}>
