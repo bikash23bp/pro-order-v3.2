@@ -455,7 +455,7 @@ export const getOrderCountsPage = createServerFn({ method: "POST" })
       p_staff: data.staff === "all" ? null : data.staff,
       p_from: data.from ?? null,
       p_to: data.to ?? null,
-      p_search: data.q || null,
+      p_search: toAsciiDigits(data.q || "") || null,
       p_phones: data.tagPhones ?? null,
       p_advance_only: data.advanceOnly || null,
       p_oms_restricted: omsAllowed !== null,
