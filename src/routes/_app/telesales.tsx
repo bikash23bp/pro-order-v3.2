@@ -508,6 +508,7 @@ function TelesalesPage() {
           info={dupFor}
           onClose={() => setDupFor(null)}
           onChanged={reload}
+          isAdmin={isAdmin}
         />
       )}
     </div>
@@ -515,11 +516,12 @@ function TelesalesPage() {
 }
 
 function DuplicatesDialog({
-  info, onClose, onChanged,
+  info, onClose, onChanged, isAdmin,
 }: {
   info: { customerId: string; phone: string; name: string | null };
   onClose: () => void;
   onChanged: () => void;
+  isAdmin?: boolean;
 }) {
   const fetchDup = useServerFn(getTelesalesDuplicateAssignments);
   const unassignFn = useServerFn(unassignMyTelesalesAssignment);
@@ -602,14 +604,14 @@ function DuplicatesDialog({
                     {r.last_contacted_at && <div>Last call: {fmt(r.last_contacted_at)}</div>}
                   </div>
                   <div className="ml-auto">
-                    {r.is_mine && (
+                    {(r.is_mine || isAdmin) && (
                       <Button
                         size="sm" variant="outline"
                         disabled={busy === r.id}
                         onClick={() => handleUnassign(r.id)}
                       >
                         {busy === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                        Unassign me
+                        {r.is_mine ? "Unassign me" : "Unassign"}
                       </Button>
                     )}
                   </div>

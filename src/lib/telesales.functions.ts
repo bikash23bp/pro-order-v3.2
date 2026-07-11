@@ -598,7 +598,12 @@ export const unassignMyTelesalesAssignment = createServerFn({ method: "POST" })
       .maybeSingle();
     if (rErr) throw new Error(rErr.message);
     if (!row) throw new Error("Assignment not found");
-    if (row.assigned_to !== userId) throw new Error("You can only unassign your own rows");
+    if (row.assigned_to !== userId) {
+      const { data: roleRow } = await supabase
+        .from("user_roles").select("role").eq("user_id", userId).maybeSingle();
+      const isAdmin = roleRow?.role === "admin" || roleRow?.role === "business_owner";
+      if (!isAdmin) throw new Error("You can only unassign your own rows");
+    }
 
     const { error } = await supabase
       .from("telesales_assignments")
