@@ -291,7 +291,7 @@ function TelesalesPage() {
       <Tabs defaultValue="workboard" className="w-full">
         <TabsList>
           <TabsTrigger value="workboard">Workboard</TabsTrigger>
-          {canViewTeleReports && <TabsTrigger value="report">Report</TabsTrigger>}
+          <TabsTrigger value="report">Report</TabsTrigger>
           {canViewTeleReports && <TabsTrigger value="pnl">Income / Expense</TabsTrigger>}
           <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
