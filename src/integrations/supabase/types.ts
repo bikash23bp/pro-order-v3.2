@@ -2418,6 +2418,30 @@ export type Database = {
           },
         ]
       }
+      telesales_clear_audit: {
+        Row: {
+          cleared_by: string | null
+          created_at: string
+          deleted_count: number
+          id: string
+          target_staff: string | null
+        }
+        Insert: {
+          cleared_by?: string | null
+          created_at?: string
+          deleted_count?: number
+          id?: string
+          target_staff?: string | null
+        }
+        Update: {
+          cleared_by?: string | null
+          created_at?: string
+          deleted_count?: number
+          id?: string
+          target_staff?: string | null
+        }
+        Relationships: []
+      }
       telesales_compensation: {
         Row: {
           base_amount: number
