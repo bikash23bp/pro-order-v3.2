@@ -21,6 +21,7 @@ import {
   reassignTelesalesAssignment, listSystemCustomersForTelesales,
   assignSystemCustomersToTelesales, clearTelesalesAssignments,
   getTelesalesDuplicateAssignments, unassignMyTelesalesAssignment,
+  listClearAssignmentsAudit,
   type TeleDuplicateRow,
   type TeleAssignment,
 } from "@/lib/telesales.functions";
@@ -637,7 +638,24 @@ function ClearAssignmentsMenu({
   onCleared: () => void;
 }) {
   const clearFn = useServerFn(clearTelesalesAssignments);
+  const auditFn = useServerFn(listClearAssignmentsAudit);
   const [pending, setPending] = useState(false);
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [auditRows, setAuditRows] = useState<Awaited<ReturnType<typeof auditFn>> | null>(null);
+  const [auditLoading, setAuditLoading] = useState(false);
+
+  const openAudit = async () => {
+    setAuditOpen(true);
+    setAuditLoading(true);
+    try {
+      const rows = await auditFn();
+      setAuditRows(rows);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load audit log");
+    } finally {
+      setAuditLoading(false);
+    }
+  };
 
   const doClear = async (userId: string | null, label: string) => {
     const msg = userId === null
@@ -683,8 +701,50 @@ function ClearAssignmentsMenu({
             </DropdownMenuItem>
           ))
         )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={openAudit}>
+          <History className="h-4 w-4" /> View audit log
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    <Dialog open={auditOpen} onOpenChange={setAuditOpen}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Clear Assignments — Audit Log</DialogTitle>
+        </DialogHeader>
+        <div className="max-h-[60vh] overflow-y-auto text-sm">
+          {auditLoading ? (
+            <div className="py-6 text-center text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin inline mr-2" />Loading…
+            </div>
+          ) : !auditRows || auditRows.length === 0 ? (
+            <div className="py-6 text-center text-muted-foreground">No records yet.</div>
+          ) : (
+            <table className="w-full">
+              <thead className="text-xs text-muted-foreground">
+                <tr className="border-b">
+                  <th className="text-left py-2 pr-2">When</th>
+                  <th className="text-left py-2 pr-2">Cleared by</th>
+                  <th className="text-left py-2 pr-2">Target</th>
+                  <th className="text-right py-2">Deleted</th>
+                </tr>
+              </thead>
+              <tbody>
+                {auditRows.map((r) => (
+                  <tr key={r.id} className="border-b last:border-0">
+                    <td className="py-2 pr-2 whitespace-nowrap">{new Date(r.created_at).toLocaleString()}</td>
+                    <td className="py-2 pr-2">{r.cleared_by_name}</td>
+                    <td className="py-2 pr-2">{r.target_staff_name ?? <span className="text-muted-foreground">All staff</span>}</td>
+                    <td className="py-2 text-right font-medium">{r.deleted_count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 
