@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { FULL_PERMISSIONS, normalizePermissions, type AppPermissions } from "@/lib/permissions";
@@ -190,7 +190,7 @@ async function fetchProfileBundle(authUser: User): Promise<ProfileBundle | null>
   }
 }
 
-export function useAuth() {
+function useAuthImpl() {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -327,4 +327,26 @@ export function useAuth() {
     }),
     [session, user, loading, profileLoading, role, permissions, profile, signOut, refreshProfile],
   );
+}
+
+type AuthContextValue = ReturnType<typeof useAuthImpl>;
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const value = useAuthImpl();
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext);
+  if (ctx) return ctx;
+  // Fallback: allow use outside provider (e.g. tests / isolated trees).
+  // Warn once so we can track any remaining stragglers.
+  if (typeof window !== "undefined" && !(window as any).__authProviderWarned) {
+    (window as any).__authProviderWarned = true;
+    console.warn("[auth] useAuth() called outside <AuthProvider> — falling back to standalone instance");
+  }
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  return useAuthImpl();
 }
