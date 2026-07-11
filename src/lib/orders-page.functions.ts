@@ -626,8 +626,7 @@ export const exportOrdersPage = createServerFn({ method: "POST" })
     let from = 0;
     while (from < EXPORT_SAFETY_CAP) {
       const to = from + EXPORT_CHUNK - 1;
-      const { data: rows, error } = await buildQuery()
-        .order(isSingleStatusFilter(data.status) ? "status" : "created_at", { ascending: isSingleStatusFilter(data.status) ? true : false })
+      const { data: rows, error } = await orderByListDefault(buildQuery(), data.status)
         .range(from, to);
       if (error) throw new Error(error.message);
       const list = rows ?? [];
