@@ -110,7 +110,7 @@ function AppLayout() {
             </div>
             <GlobalSearch />
             <div className="flex items-center gap-2 shrink-0">
-              <DuplicateTopbarAlert />
+              <Suspense fallback={null}><DuplicateTopbarAlert /></Suspense>
               <AutoLockControl />
               {role && permissions && canAccessRoute("/inventory", role, permissions) && (
                 <Button
@@ -136,7 +136,7 @@ function AppLayout() {
               <UserProfileMenu />
             </div>
           </header>
-          <NoticeMarquee />
+          <Suspense fallback={null}><NoticeMarquee /></Suspense>
           <main className="flex-1 min-w-0 p-4 sm:p-6">
             <Outlet />
           </main>
