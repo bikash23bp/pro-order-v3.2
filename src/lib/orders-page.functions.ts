@@ -197,27 +197,24 @@ function applyCommonFilters(qb: any, data: z.infer<typeof OrdersInput>) {
   const sRaw = data.q.trim();
   const s = toAsciiDigits(sRaw);
   if (s) {
-    const safe = s.replace(/[%,()]/g, "");
     const digits = s.replace(/\D/g, "");
     const normPhone = normalizeBDPhone(sRaw);
-    const parts: string[] = [`customer_name.ilike.%${safe}%`];
+    // Search ONLY by normalized phone or order_number for speed.
+    const parts: string[] = [];
     if (normPhone.length === 11 && normPhone.startsWith("01")) {
-      // Clean 11-digit BD phone — exact + last-8 fallback for legacy data
-      const tail = normPhone.slice(-8);
       parts.push(`phone_normalized.eq.${normPhone}`);
-      parts.push(`phone_normalized.ilike.%${tail}%`);
-      parts.push(`customer_phone.ilike.%${tail}%`);
     } else if (digits.length >= 3) {
       const needle = digits.length >= 8 ? digits.slice(-8) : digits;
-      parts.push(`customer_phone.ilike.%${needle}%`);
       parts.push(`phone_normalized.ilike.%${needle}%`);
-      if (/^\d+$/.test(digits) && digits.length <= 9) {
-        parts.push(`order_number.eq.${parseInt(digits, 10)}`);
-      }
-    } else {
-      parts.push(`customer_phone.ilike.%${safe}%`);
     }
-    qb = qb.or(parts.join(","));
+    if (/^\d+$/.test(digits) && digits.length >= 1 && digits.length <= 9) {
+      parts.push(`order_number.eq.${parseInt(digits, 10)}`);
+    }
+    if (parts.length === 0) {
+      qb = qb.eq("id", "00000000-0000-0000-0000-000000000000");
+    } else {
+      qb = qb.or(parts.join(","));
+    }
   }
   if (data.tagPhones !== null && data.tagPhones !== undefined) {
     const keys = Array.from(

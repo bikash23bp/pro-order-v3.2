@@ -57,18 +57,20 @@ export function GlobalSearch() {
     const t = setTimeout(async () => {
       const digits = term.replace(/\D/g, "");
       const normPhone = normalizeBDPhone(termRaw);
-      const like = `%${term.replace(/[%,()]/g, "")}%`;
-      const filters: string[] = [`customer_name.ilike.${like}`];
+      // Search ONLY by normalized phone or order_number for speed.
+      const filters: string[] = [];
       if (normPhone.length === 11 && normPhone.startsWith("01")) {
-        const tail = normPhone.slice(-8);
         filters.push(`phone_normalized.eq.${normPhone}`);
-        filters.push(`phone_normalized.ilike.%${tail}%`);
-        filters.push(`customer_phone.ilike.%${tail}%`);
       } else if (digits.length >= 3) {
         const needle = digits.length >= 8 ? digits.slice(-8) : digits;
         filters.push(`phone_normalized.ilike.%${needle}%`);
-        filters.push(`customer_phone.ilike.%${needle}%`);
-        if (digits.length <= 9) filters.push(`order_number.eq.${parseInt(digits, 10)}`);
+      }
+      if (/^\d+$/.test(digits) && digits.length >= 1 && digits.length <= 9) {
+        filters.push(`order_number.eq.${parseInt(digits, 10)}`);
+      }
+      if (filters.length === 0) {
+        if (myReqId === reqIdRef.current) { setHits([]); setLoading(false); }
+        return;
       }
       // Cancel any prior in-flight request so the server can stop working on it.
       abortRef.current?.abort();
