@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet, useNavigate, Link, useRouterState } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -11,13 +11,16 @@ import { canAccessRoute } from "@/lib/rbac";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { QuickRestockDialog } from "@/components/inventory/QuickRestockDialog";
-import { InactivityLock } from "@/components/InactivityLock";
-import { RemoteLock } from "@/components/RemoteLock";
 import { AutoLockControl } from "@/components/AutoLockControl";
-import { ChatWidget } from "@/components/ChatWidget";
-import { DuplicateTopbarAlert } from "@/components/DuplicateTopbarAlert";
-import { NoticeMarquee } from "@/components/NoticeMarquee";
 import { supabase } from "@/integrations/supabase/client";
+
+// Lazy-load heavy side components so login/first paint isn't blocked by
+// their queries and subscriptions all mounting at once.
+const InactivityLock = lazy(() => import("@/components/InactivityLock").then(m => ({ default: m.InactivityLock })));
+const RemoteLock = lazy(() => import("@/components/RemoteLock").then(m => ({ default: m.RemoteLock })));
+const ChatWidget = lazy(() => import("@/components/ChatWidget").then(m => ({ default: m.ChatWidget })));
+const DuplicateTopbarAlert = lazy(() => import("@/components/DuplicateTopbarAlert").then(m => ({ default: m.DuplicateTopbarAlert })));
+const NoticeMarquee = lazy(() => import("@/components/NoticeMarquee").then(m => ({ default: m.NoticeMarquee })));
 
 
 
@@ -66,34 +69,30 @@ function AppLayout() {
   // Heartbeat: update current user's last_seen_at every 90s while logged in
   useEffect(() => {
     if (!session) return;
-    const ping = () => { supabase.rpc("heartbeat").then(() => {}); };
+    let lastPing = 0;
+    const MIN_INTERVAL = 60_000; // throttle: no more than once per minute
+    const ping = () => {
+      const now = Date.now();
+      if (now - lastPing < MIN_INTERVAL) return;
+      lastPing = now;
+      supabase.rpc("heartbeat").then(() => {});
+    };
     ping();
-    const onVisible = () => { if (document.visibilityState === "visible") ping(); };
-    document.addEventListener("visibilitychange", onVisible);
-    const id = window.setInterval(ping, 90_000);
+    const id = window.setInterval(ping, 120_000);
     return () => {
       window.clearInterval(id);
-      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [session]);
 
-  // Keep the orders cache aware of changes while the user is on other pages.
-  // Mark it stale immediately so returning to Orders paints cached rows first,
-  // then refreshes list + counters together without a delayed mismatch.
+  // When user navigates TO the orders page, mark the cache stale so it
+  // refetches once. No always-on realtime subscription needed here — the
+  // orders page owns its own subscription while mounted.
   useEffect(() => {
-    if (!session || path === "/orders" || path === "/orders/") return;
-    const markOrdersChanged = () => {
+    if (!session) return;
+    if (path === "/orders" || path === "/orders/") {
       queryClient.invalidateQueries({ queryKey: ["orders"], refetchType: "none" });
       window.dispatchEvent(new CustomEvent("orders:changed"));
-    };
-    const channel = supabase
-      .channel("orders-cache-sync-away")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, markOrdersChanged)
-      .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, markOrdersChanged)
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    }
   }, [session, path, queryClient]);
 
   if (loading) return <div className="min-h-screen grid place-items-center text-muted-foreground">Loading…</div>;
@@ -145,9 +144,11 @@ function AppLayout() {
         </div>
       </div>
       <QuickRestockDialog open={restockOpen} onOpenChange={setRestockOpen} />
-      <InactivityLock />
-      <RemoteLock />
-      <ChatWidget />
+      <Suspense fallback={null}>
+        <InactivityLock />
+        <RemoteLock />
+        <ChatWidget />
+      </Suspense>
     </SidebarProvider>
   );
 }
