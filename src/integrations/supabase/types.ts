@@ -2558,7 +2558,6 @@ export type Database = {
           can_manage_products: boolean
           can_manage_telesales: boolean
           can_manage_users: boolean
-          can_view_all_orders: boolean
           can_view_dashboard: boolean
           can_view_loss: boolean
           can_view_orders: boolean
@@ -2592,7 +2591,6 @@ export type Database = {
           can_manage_products?: boolean
           can_manage_telesales?: boolean
           can_manage_users?: boolean
-          can_view_all_orders?: boolean
           can_view_dashboard?: boolean
           can_view_loss?: boolean
           can_view_orders?: boolean
@@ -2626,7 +2624,6 @@ export type Database = {
           can_manage_products?: boolean
           can_manage_telesales?: boolean
           can_manage_users?: boolean
-          can_view_all_orders?: boolean
           can_view_dashboard?: boolean
           can_view_loss?: boolean
           can_view_orders?: boolean
@@ -3057,7 +3054,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      can_view_all_orders: { Args: { _uid: string }; Returns: boolean }
       check_user_limit: {
         Args: { _type: string; _user_id: string }
         Returns: boolean
