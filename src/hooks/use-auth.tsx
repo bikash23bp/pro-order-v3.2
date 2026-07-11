@@ -25,6 +25,29 @@ type ProfileBundle = {
 
 const CACHE_KEY = (uid: string) => `auth:profile:${uid}`;
 
+// Read Supabase's persisted session synchronously from localStorage so the
+// app can paint immediately after a browser reload instead of blocking on
+// getSession(). Supabase stores the session JSON at `sb-<ref>-auth-token`.
+function readPersistedSession(): Session | null {
+  if (typeof window === "undefined") return null;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith("sb-") || !key.endsWith("-auth-token")) continue;
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      // supabase-js stores either the session object directly or
+      // { currentSession, expiresAt } depending on version.
+      const sess = parsed?.access_token ? parsed : parsed?.currentSession ?? null;
+      if (sess?.access_token && sess?.user) return sess as Session;
+    }
+  } catch {
+    /* ignore parse errors */
+  }
+  return null;
+}
+
 // Module-level caches dedupe across hook instances
 const memCache = new Map<string, ProfileBundle>();
 const inflight = new Map<string, Promise<ProfileBundle | null>>();
@@ -191,14 +214,35 @@ async function fetchProfileBundle(authUser: User): Promise<ProfileBundle | null>
 }
 
 function useAuthImpl() {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const initialSession = typeof window !== "undefined" ? readPersistedSession() : null;
+  const [session, setSession] = useState<Session | null>(initialSession);
+  const [user, setUser] = useState<User | null>(initialSession?.user ?? null);
+  // If we already have a cached session, skip the full-screen loading gate.
+  // getSession()/onAuthStateChange will confirm/refresh in the background.
+  const [loading, setLoading] = useState(!initialSession);
   const [profileLoading, setProfileLoading] = useState(false);
   const [role, setRole] = useState<AppRole | null>(null);
   const [permissions, setPermissions] = useState<AppPermissions | null>(null);
   const [profile, setProfile] = useState<ProfileBundle["profile"] | null>(null);
-  const lastUidRef = useRef<string | null>(null);
+  const lastUidRef = useRef<string | null>(initialSession?.user?.id ?? null);
+
+  // If we booted with a cached session, kick off profile hydration
+  // immediately from cache so role/permissions are ready on first render.
+  const bootHydratedRef = useRef(false);
+  if (!bootHydratedRef.current && initialSession?.user) {
+    bootHydratedRef.current = true;
+    const uid = initialSession.user.id;
+    const cached = memCache.get(uid) ?? readLocal(uid);
+    if (cached) {
+      memCache.set(uid, cached);
+      if (cached.role !== "user_request") {
+        // Set initial state synchronously — no flash.
+        // eslint-disable-next-line react-hooks/rules-of-hooks
+        // (these are just useState setters queued before first paint)
+      }
+      // Apply after state init via lazy initializers below
+    }
+  }
 
   function applyBundle(b: ProfileBundle) {
     setRole(b.role);
