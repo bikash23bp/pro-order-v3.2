@@ -229,7 +229,9 @@ function useAuthImpl() {
   const [role, setRole] = useState<AppRole | null>(usableBundle?.role ?? null);
   const [permissions, setPermissions] = useState<AppPermissions | null>(usableBundle?.permissions ?? null);
   const [profile, setProfile] = useState<ProfileBundle["profile"] | null>(usableBundle?.profile ?? null);
-  const lastUidRef = useRef<string | null>(initialSession?.user?.id ?? null);
+  // Keep lastUidRef null so the mount effect's getSession() path still runs
+  // a background hydrate() to refresh role/permissions from the server.
+  const lastUidRef = useRef<string | null>(null);
 
   function applyBundle(b: ProfileBundle) {
     setRole(b.role);
