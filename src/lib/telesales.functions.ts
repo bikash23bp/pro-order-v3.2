@@ -1170,6 +1170,9 @@ export const getTelesalesStaffReport = createServerFn({ method: "POST" })
       rows.push(b);
     }
     rows.sort((a, b) => (b.orders + b.assigned) - (a.orders + a.assigned));
+    if (!canViewAll) {
+      return rows.filter((r) => r.staff_id === userId);
+    }
     return rows;
   });
 
