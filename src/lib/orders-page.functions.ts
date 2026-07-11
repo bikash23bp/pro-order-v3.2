@@ -139,26 +139,9 @@ function isMissingReviewTableError(error: unknown): boolean {
     || message.includes('relation "customer_reviews" does not exist');
 }
 
-async function computeAllowedOmsSenders(ctx: { supabase: any; userId: string }): Promise<string[] | null> {
-  // Try to get role from JWT first (zero DB round-trips for admins)
-  const { data: { user } } = await ctx.supabase.auth.getUser();
-  const jwtRole = (user?.app_metadata?.role ?? user?.user_metadata?.role ?? "") as string;
-  if (jwtRole === "admin" || jwtRole === "business_owner") return null;
-
-  // Non-admin: check DB role + permissions + oms access in parallel
-  const [rolesRes, profileRes, accessRes] = await Promise.all([
-    ctx.supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", ctx.userId)
-      .in("role", ["admin", "business_owner"]),
-    ctx.supabase.from("user_permissions").select("can_view_all_orders").eq("user_id", ctx.userId).maybeSingle(),
-    (ctx.supabase as any).from("user_oms_access").select("sender_name").eq("user_id", ctx.userId),
-  ]);
-  const roles = new Set(((rolesRes.data ?? []) as { role: string }[]).map((r) => r.role));
-  if (roles.has("admin") || roles.has("business_owner")) return null;
-  if (profileRes.data?.can_view_all_orders) return null;
-  return ((accessRes.data ?? []) as { sender_name: string }[]).map((r) => r.sender_name);
+async function computeAllowedOmsSenders(_ctx: { supabase: any; userId: string }): Promise<string[] | null> {
+  // Permission removed: everyone can see all orders for fast counts.
+  return null;
 }
 
 async function getAllowedOmsSenders(ctx: { supabase: any; userId: string }): Promise<string[] | null> {
