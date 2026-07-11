@@ -453,11 +453,9 @@ function TelesalesPage() {
       </Card>
         </TabsContent>
 
-        {canViewTeleReports && (
-          <TabsContent value="report" className="mt-4">
-            <TelesalesReport />
-          </TabsContent>
-        )}
+        <TabsContent value="report" className="mt-4">
+          <TelesalesReport />
+        </TabsContent>
 
         {canViewTeleReports && (
           <TabsContent value="pnl" className="mt-4">
