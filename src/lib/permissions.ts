@@ -9,7 +9,6 @@ export type AppPermissions = {
   // Added
   can_view_dashboard: boolean;
   can_view_orders: boolean;
-  can_view_all_orders: boolean;
   can_manage_orders: boolean;
   can_change_order_status: boolean;
   can_view_web_orders: boolean;
@@ -46,7 +45,6 @@ export const PERMISSION_GROUPS: Array<{
     perms: [
       { key: "can_view_dashboard", label: "View Dashboard" },
       { key: "can_view_orders", label: "View Orders" },
-      { key: "can_view_all_orders", label: "View All Users' Orders" },
       { key: "can_manage_orders", label: "Manage Orders" },
       { key: "can_change_order_status", label: "Change Order Status" },
       { key: "can_view_web_orders", label: "View Web Orders" },
