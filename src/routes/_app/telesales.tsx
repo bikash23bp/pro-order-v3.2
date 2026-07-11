@@ -273,7 +273,7 @@ function TelesalesPage() {
                 <Button variant="outline" onClick={() => setAssignOpen(true)}>
                   <UserPlus className="h-4 w-4" /> Assign Customers
                 </Button>
-                <ClearAssignmentsMenu staff={staff} onCleared={reload} />
+                {isAdmin && <ClearAssignmentsMenu staff={staff} onCleared={reload} />}
               </>
             )}
             <Button asChild>
