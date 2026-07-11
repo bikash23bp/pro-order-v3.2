@@ -516,11 +516,12 @@ function TelesalesPage() {
 }
 
 function DuplicatesDialog({
-  info, onClose, onChanged,
+  info, onClose, onChanged, isAdmin,
 }: {
   info: { customerId: string; phone: string; name: string | null };
   onClose: () => void;
   onChanged: () => void;
+  isAdmin?: boolean;
 }) {
   const fetchDup = useServerFn(getTelesalesDuplicateAssignments);
   const unassignFn = useServerFn(unassignMyTelesalesAssignment);
