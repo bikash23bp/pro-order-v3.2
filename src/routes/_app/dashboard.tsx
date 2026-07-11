@@ -40,16 +40,16 @@ const PRESET_LABELS: Record<Exclude<PresetKey, "all">, string> = {
 };
 
 const STATUS_CARDS: { key: StatusKey; label: string; icon: typeof Package; color: string; to: string }[] = [
-  { key: "all", label: "Total Orders", icon: ShoppingCart, color: "text-blue-500", to: "/orders" },
-  { key: "pending_web", label: "Pending Orders", icon: AlertCircle, color: "text-amber-500", to: "/orders?status=pending_web" },
-  { key: "processing", label: "Processing", icon: Clock, color: "text-yellow-500", to: "/orders?status=processing" },
-  { key: "ready_to_ship", label: "Ready to Ship", icon: Package, color: "text-blue-400", to: "/orders?status=ready_to_ship" },
-  { key: "shipped", label: "Shipped", icon: Truck, color: "text-indigo-500", to: "/orders?status=shipped" },
-  { key: "completed", label: "Completed", icon: CheckCircle2, color: "text-emerald-500", to: "/orders?status=completed" },
-  { key: "cancelled", label: "Cancelled", icon: XCircle, color: "text-red-500", to: "/orders?status=cancelled" },
-  { key: "no_response", label: "No Response", icon: PhoneOff, color: "text-orange-500", to: "/orders?status=no_response" },
-  { key: "fraud", label: "Fraud", icon: ShieldAlert, color: "text-rose-500", to: "/orders?status=fraud" },
-  { key: "preorder", label: "Pre-Orders", icon: CalendarClock, color: "text-violet-500", to: "/orders?status=preorder" },
+  { key: "all", label: "Total Orders", icon: ShoppingCart, color: "text-blue-500", to: "/orders?status=pending" },
+  { key: "pending_web", label: "Pending Orders", icon: AlertCircle, color: "text-amber-500", to: "/orders?status=pending" },
+  { key: "processing", label: "Processing", icon: Clock, color: "text-yellow-500", to: "/orders?status=pending" },
+  { key: "ready_to_ship", label: "Ready to Ship", icon: Package, color: "text-blue-400", to: "/orders?status=pending" },
+  { key: "shipped", label: "Shipped", icon: Truck, color: "text-indigo-500", to: "/orders?status=pending" },
+  { key: "completed", label: "Completed", icon: CheckCircle2, color: "text-emerald-500", to: "/orders?status=pending" },
+  { key: "cancelled", label: "Cancelled", icon: XCircle, color: "text-red-500", to: "/orders?status=pending" },
+  { key: "no_response", label: "No Response", icon: PhoneOff, color: "text-orange-500", to: "/orders?status=pending" },
+  { key: "fraud", label: "Fraud", icon: ShieldAlert, color: "text-rose-500", to: "/orders?status=pending" },
+  { key: "preorder", label: "Pre-Orders", icon: CalendarClock, color: "text-violet-500", to: "/orders?status=pending" },
 ];
 
 function Dashboard() {
@@ -131,26 +131,26 @@ function Dashboard() {
 
   // Warm the Orders page cache once after login so /orders feels instant.
   // Matches the default query keys used by orders.index.lazy.tsx (status=pending,
-  // page=1, limit=10, all filters "all", date preset last365).
+  // page=1, limit=10, all filters "all", date preset all).
   useEffect(() => {
     const r = presetRange("last365");
     const fromIso = r.from.toISOString();
     const toIso = r.to.toISOString();
     const baseFilters = {
       source: "all", site: "all", courier: "all", partner: "all", staff: "all",
-      preset: "last365" as const, from: fromIso, to: toIso, q: "",
+      preset: "all" as const, from: fromIso, to: toIso, q: "",
       tagPhones: null as string[] | null, advanceOnly: false,
     };
-    // Must match the orders route's default search (status: "all" per ordersSearch Zod schema).
-    const listKey = ["orders", "list", { status: "all", page: 1, limit: 10, ...baseFilters }];
+    // Must match the orders route's default search.
+    const listKey = ["orders", "list", { status: "pending", page: 1, limit: 10, ...baseFilters }];
     const countsKey = ["orders", "counts", { ...baseFilters }];
     qc.prefetchQuery({
       queryKey: listKey,
       staleTime: 60_000,
       queryFn: () => prefetchOrdersList({ data: {
-        status: "all", page: 1, limit: 10,
+        status: "pending", page: 1, limit: 10,
         source: "all", site: "all", courier: "all", partner: "all", staff: "all",
-        from: fromIso, to: toIso, q: "", tagPhones: null, advanceOnly: false,
+        from: null, to: null, q: "", tagPhones: null, advanceOnly: false,
       } }),
     }).catch(() => {});
     qc.prefetchQuery({
@@ -158,7 +158,7 @@ function Dashboard() {
       staleTime: 2 * 60_000,
       queryFn: () => prefetchOrderCounts({ data: {
         source: "all", site: "all", courier: "all", partner: "all", staff: "all",
-        from: fromIso, to: toIso, q: "", tagPhones: null, advanceOnly: false,
+        from: null, to: null, q: "", tagPhones: null, advanceOnly: false,
       } }),
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
