@@ -850,23 +850,29 @@ export const assignSystemCustomersToTelesales = createServerFn({ method: "POST" 
       .from("user_roles").select("role").eq("user_id", userId).maybeSingle();
     if ((roleRow?.role !== "admin" && roleRow?.role !== "business_owner")) throw new Error("Only admins can assign customers");
 
-    const seen = new Map<string, { name: string | null; phone: string; address: string | null }>();
+    // NOTE: no phone-based dedup — একই ফোনে একাধিক entry এলে প্রতিটার জন্য
+    // আলাদা assignment তৈরি হবে (per-row)। imported_customers table এ
+    // phone unique, তাই সেখানে dedup রাখতেই হবে; কিন্তু assignments per-row।
+    const normalized: { norm: string; row: { name: string | null; phone: string; address: string | null } }[] = [];
+    const uniq = new Map<string, { name: string | null; phone: string; address: string | null }>();
     for (const c of data.customers) {
       const n = normalizePhone(c.phone);
-      if (n && !seen.has(n)) seen.set(n, c);
+      if (!n) continue;
+      normalized.push({ norm: n, row: c });
+      if (!uniq.has(n)) uniq.set(n, c);
     }
-    if (seen.size === 0) return { created: 0, updated: 0, totalCustomers: 0 };
+    if (normalized.length === 0) return { created: 0, updated: 0, totalCustomers: 0 };
 
-    const requestedPhones = [...seen.values()].map((v) => v.phone);
+    const requestedPhones = [...uniq.values()].map((v) => v.phone);
     const existing = await loadImportedCustomersByNormalizedPhone(supabase, requestedPhones);
     const existingByNorm = new Map<string, string>();
     for (const e of existing ?? []) {
       const n = normalizePhone(e.phone);
-      if (n && seen.has(n) && !existingByNorm.has(n)) existingByNorm.set(n, e.id);
+      if (n && uniq.has(n) && !existingByNorm.has(n)) existingByNorm.set(n, e.id);
     }
 
     const existingIdsBeforeInsert = new Set(existingByNorm.values());
-    const toInsert = [...seen.entries()]
+    const toInsert = [...uniq.entries()]
       .filter(([n]) => !existingByNorm.has(n))
       .map(([, v]) => ({ name: v.name, phone: v.phone, address: v.address, created_by: userId }));
 
@@ -884,22 +890,23 @@ export const assignSystemCustomersToTelesales = createServerFn({ method: "POST" 
       const refreshed = await loadImportedCustomersByNormalizedPhone(supabase, requestedPhones);
       for (const row of refreshed) {
         const n = normalizePhone(row.phone);
-        if (n && seen.has(n) && !existingByNorm.has(n)) existingByNorm.set(n, row.id);
+        if (n && uniq.has(n) && !existingByNorm.has(n)) existingByNorm.set(n, row.id);
       }
       insertedIds = [...existingByNorm.values()].filter((id) => !existingIdsBeforeInsert.has(id));
     }
 
-    const allIds = [...new Set([...existingByNorm.values(), ...insertedIds])];
-
-    // Always insert NEW assignments — duplicates allowed.
-    const assignPayload = allIds.map((customer_id) => ({
-      customer_id,
-      assigned_to: data.assignedTo,
-      created_by: userId,
-    }));
+    // Build one assignment per INPUT row (no phone-dedup).
+    const assignPayload = normalized
+      .map(({ norm }) => existingByNorm.get(norm))
+      .filter((id): id is string => Boolean(id))
+      .map((customer_id) => ({
+        customer_id,
+        assigned_to: data.assignedTo,
+        created_by: userId,
+      }));
 
     const created = await insertTelesalesAssignmentsInChunks(supabase, assignPayload);
-    return { created, updated: 0, totalCustomers: allIds.length };
+    return { created, updated: 0, totalCustomers: assignPayload.length };
   });
 
 export const listUnassignedCustomers = createServerFn({ method: "POST" })
