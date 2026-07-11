@@ -291,7 +291,7 @@ function TelesalesPage() {
       <Tabs defaultValue="workboard" className="w-full">
         <TabsList>
           <TabsTrigger value="workboard">Workboard</TabsTrigger>
-          {canViewTeleReports && <TabsTrigger value="report">Report</TabsTrigger>}
+          <TabsTrigger value="report">Report</TabsTrigger>
           {canViewTeleReports && <TabsTrigger value="pnl">Income / Expense</TabsTrigger>}
           <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
@@ -453,11 +453,9 @@ function TelesalesPage() {
       </Card>
         </TabsContent>
 
-        {canViewTeleReports && (
-          <TabsContent value="report" className="mt-4">
-            <TelesalesReport />
-          </TabsContent>
-        )}
+        <TabsContent value="report" className="mt-4">
+          <TelesalesReport />
+        </TabsContent>
 
         {canViewTeleReports && (
           <TabsContent value="pnl" className="mt-4">

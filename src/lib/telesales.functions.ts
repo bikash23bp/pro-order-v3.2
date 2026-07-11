@@ -989,7 +989,18 @@ export const getTelesalesStaffReport = createServerFn({ method: "POST" })
     }).parse(input),
   )
   .handler(async ({ data, context }): Promise<TeleStaffReportRow[]> => {
-    const { supabase } = context;
+    const { supabase, userId } = context;
+    // Gate: without can_view_telesales_reports (and not admin/owner),
+    // the caller can only see their own row.
+    const { data: roleRow } = await supabase
+      .from("user_roles").select("role").eq("user_id", userId).maybeSingle();
+    const isPrivileged = roleRow?.role === "admin" || roleRow?.role === "business_owner";
+    let canViewAll = isPrivileged;
+    if (!isPrivileged) {
+      const { data: perms } = await supabase
+        .from("user_permissions").select("can_view_telesales_reports").eq("user_id", userId).maybeSingle();
+      canViewAll = !!(perms as { can_view_telesales_reports?: boolean } | null)?.can_view_telesales_reports;
+    }
     // Asia/Dhaka (+06:00) day boundaries so "today" matches the user's local day
     const fromIso = data.from ? `${data.from}T00:00:00+06:00` : null;
     const toIso = data.to ? `${data.to}T23:59:59+06:00` : null;
@@ -1159,6 +1170,9 @@ export const getTelesalesStaffReport = createServerFn({ method: "POST" })
       rows.push(b);
     }
     rows.sort((a, b) => (b.orders + b.assigned) - (a.orders + a.assigned));
+    if (!canViewAll) {
+      return rows.filter((r) => r.staff_id === userId);
+    }
     return rows;
   });
 
@@ -1197,7 +1211,20 @@ export const getTelesalesDrilldown = createServerFn({ method: "POST" })
     }).parse(input),
   )
   .handler(async ({ data, context }): Promise<TeleDrilldownItem[]> => {
-    const { supabase } = context;
+    const { supabase, userId } = context;
+    const { data: roleRow } = await supabase
+      .from("user_roles").select("role").eq("user_id", userId).maybeSingle();
+    const isPrivileged = roleRow?.role === "admin" || roleRow?.role === "business_owner";
+    let canViewAll = isPrivileged;
+    if (!isPrivileged) {
+      const { data: perms } = await supabase
+        .from("user_permissions").select("can_view_telesales_reports").eq("user_id", userId).maybeSingle();
+      canViewAll = !!(perms as { can_view_telesales_reports?: boolean } | null)?.can_view_telesales_reports;
+    }
+    if (!canViewAll && data.staffId !== userId) {
+      // Users without permission can only drill into their own metrics.
+      return [];
+    }
     const fromIso = data.from ? `${data.from}T00:00:00+06:00` : null;
     const toIso = data.to ? `${data.to}T23:59:59+06:00` : null;
 
