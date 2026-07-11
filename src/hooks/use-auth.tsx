@@ -25,6 +25,29 @@ type ProfileBundle = {
 
 const CACHE_KEY = (uid: string) => `auth:profile:${uid}`;
 
+// Read Supabase's persisted session synchronously from localStorage so the
+// app can paint immediately after a browser reload instead of blocking on
+// getSession(). Supabase stores the session JSON at `sb-<ref>-auth-token`.
+function readPersistedSession(): Session | null {
+  if (typeof window === "undefined") return null;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith("sb-") || !key.endsWith("-auth-token")) continue;
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      // supabase-js stores either the session object directly or
+      // { currentSession, expiresAt } depending on version.
+      const sess = parsed?.access_token ? parsed : parsed?.currentSession ?? null;
+      if (sess?.access_token && sess?.user) return sess as Session;
+    }
+  } catch {
+    /* ignore parse errors */
+  }
+  return null;
+}
+
 // Module-level caches dedupe across hook instances
 const memCache = new Map<string, ProfileBundle>();
 const inflight = new Map<string, Promise<ProfileBundle | null>>();
@@ -191,13 +214,23 @@ async function fetchProfileBundle(authUser: User): Promise<ProfileBundle | null>
 }
 
 function useAuthImpl() {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const initialSession = typeof window !== "undefined" ? readPersistedSession() : null;
+  const initialBundle = initialSession?.user
+    ? memCache.get(initialSession.user.id) ?? readLocal(initialSession.user.id) ?? null
+    : null;
+  if (initialBundle && initialSession?.user) memCache.set(initialSession.user.id, initialBundle);
+  const usableBundle = initialBundle && initialBundle.role !== "user_request" ? initialBundle : null;
+  const [session, setSession] = useState<Session | null>(initialSession);
+  const [user, setUser] = useState<User | null>(initialSession?.user ?? null);
+  // If we already have a cached session, skip the full-screen loading gate.
+  // getSession()/onAuthStateChange will confirm/refresh in the background.
+  const [loading, setLoading] = useState(!initialSession);
   const [profileLoading, setProfileLoading] = useState(false);
-  const [role, setRole] = useState<AppRole | null>(null);
-  const [permissions, setPermissions] = useState<AppPermissions | null>(null);
-  const [profile, setProfile] = useState<ProfileBundle["profile"] | null>(null);
+  const [role, setRole] = useState<AppRole | null>(usableBundle?.role ?? null);
+  const [permissions, setPermissions] = useState<AppPermissions | null>(usableBundle?.permissions ?? null);
+  const [profile, setProfile] = useState<ProfileBundle["profile"] | null>(usableBundle?.profile ?? null);
+  // Keep lastUidRef null so the mount effect's getSession() path still runs
+  // a background hydrate() to refresh role/permissions from the server.
   const lastUidRef = useRef<string | null>(null);
 
   function applyBundle(b: ProfileBundle) {
