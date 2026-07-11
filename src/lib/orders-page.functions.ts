@@ -246,6 +246,32 @@ function applyFilters(qb: any, data: z.infer<typeof OrdersInput>) {
   return qb.eq("status", data.status);
 }
 
+// When the tab pins `status` to a single value, ordering by (status, created_at)
+// lets Postgres pick the composite index on (status, created_at) instead of
+// scanning the created_at index backwards and filtering. Order-visible-wise it's
+// identical because every returned row shares the same status.
+function isSingleStatusFilter(status: string): boolean {
+  switch (status) {
+    case "all":
+    case "web":
+    case "facebook":
+    case "partner":
+    case "preorder":
+    case "sent_to_partner":
+    case "incomplete":
+      return false;
+    default:
+      return true;
+  }
+}
+
+function orderByListDefault(qb: any, status: string) {
+  if (isSingleStatusFilter(status)) {
+    qb = qb.order("status", { ascending: true });
+  }
+  return qb.order("created_at", { ascending: false });
+}
+
 async function fetchOrdersPageWithoutCount(
   context: any,
   data: z.infer<typeof OrdersInput>,
@@ -255,8 +281,7 @@ async function fetchOrdersPageWithoutCount(
   const runQuery = async (selectCols: string) => {
     let qb: any = context.supabase.from("orders").select(selectCols);
     qb = buildQuery(qb);
-    return await qb
-      .order("created_at", { ascending: false })
+    return await orderByListDefault(qb, data.status)
       .range(offset, offset + data.limit);
   };
 
@@ -601,8 +626,7 @@ export const exportOrdersPage = createServerFn({ method: "POST" })
     let from = 0;
     while (from < EXPORT_SAFETY_CAP) {
       const to = from + EXPORT_CHUNK - 1;
-      const { data: rows, error } = await buildQuery()
-        .order("created_at", { ascending: false })
+      const { data: rows, error } = await orderByListDefault(buildQuery(), data.status)
         .range(from, to);
       if (error) throw new Error(error.message);
       const list = rows ?? [];
