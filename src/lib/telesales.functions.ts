@@ -397,6 +397,39 @@ export const clearTelesalesAssignments = createServerFn({ method: "POST" })
     return { deleted: (n as number) ?? 0 };
   });
 
+export const listClearAssignmentsAudit = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase } = context;
+    const { data: rows, error } = await supabase
+      .from("telesales_clear_audit" as never)
+      .select("id, cleared_by, target_staff, deleted_count, created_at")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) throw new Error(error.message);
+    const ids = [
+      ...new Set(
+        ((rows ?? []) as { cleared_by: string | null; target_staff: string | null }[])
+          .flatMap((r) => [r.cleared_by, r.target_staff])
+          .filter((x): x is string => Boolean(x)),
+      ),
+    ];
+    const { data: profs } = ids.length
+      ? await supabase.from("profiles").select("id, full_name, email").in("id", ids)
+      : { data: [] as { id: string; full_name: string | null; email: string | null }[] };
+    const nameMap = new Map((profs ?? []).map((p) => [p.id, p.full_name || p.email || "User"]));
+    return ((rows ?? []) as {
+      id: string; cleared_by: string | null; target_staff: string | null;
+      deleted_count: number; created_at: string;
+    }[]).map((r) => ({
+      id: r.id,
+      deleted_count: r.deleted_count,
+      created_at: r.created_at,
+      cleared_by_name: r.cleared_by ? nameMap.get(r.cleared_by) ?? "User" : "System",
+      target_staff_name: r.target_staff ? nameMap.get(r.target_staff) ?? "User" : null, // null = all
+    }));
+  });
+
 export const reassignTelesalesAssignment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
