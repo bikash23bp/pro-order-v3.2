@@ -1211,7 +1211,20 @@ export const getTelesalesDrilldown = createServerFn({ method: "POST" })
     }).parse(input),
   )
   .handler(async ({ data, context }): Promise<TeleDrilldownItem[]> => {
-    const { supabase } = context;
+    const { supabase, userId } = context;
+    const { data: roleRow } = await supabase
+      .from("user_roles").select("role").eq("user_id", userId).maybeSingle();
+    const isPrivileged = roleRow?.role === "admin" || roleRow?.role === "business_owner";
+    let canViewAll = isPrivileged;
+    if (!isPrivileged) {
+      const { data: perms } = await supabase
+        .from("user_permissions").select("can_view_telesales_reports").eq("user_id", userId).maybeSingle();
+      canViewAll = !!(perms as { can_view_telesales_reports?: boolean } | null)?.can_view_telesales_reports;
+    }
+    if (!canViewAll && data.staffId !== userId) {
+      // Users without permission can only drill into their own metrics.
+      return [];
+    }
     const fromIso = data.from ? `${data.from}T00:00:00+06:00` : null;
     const toIso = data.to ? `${data.to}T23:59:59+06:00` : null;
 
