@@ -182,21 +182,12 @@ function applyCommonFilters(qb: any, data: z.infer<typeof OrdersInput>) {
   if (s) {
     const digits = s.replace(/\D/g, "");
     const normPhone = normalizeBDPhone(sRaw);
-    // Search ONLY by normalized phone or order_number for speed.
-    const parts: string[] = [];
+    // Search ONLY by complete normalized phone for maximum speed.
+    // No name/order/customer_phone ILIKE fallback: those force slower scans.
     if (normPhone.length === 11 && normPhone.startsWith("01")) {
-      parts.push(`phone_normalized.eq.${normPhone}`);
-    } else if (digits.length >= 3) {
-      const needle = digits.length >= 8 ? digits.slice(-8) : digits;
-      parts.push(`phone_normalized.ilike.%${needle}%`);
-    }
-    if (/^\d+$/.test(digits) && digits.length >= 1 && digits.length <= 9) {
-      parts.push(`order_number.eq.${parseInt(digits, 10)}`);
-    }
-    if (parts.length === 0) {
-      qb = qb.eq("id", "00000000-0000-0000-0000-000000000000");
+      qb = qb.eq("phone_normalized", normPhone);
     } else {
-      qb = qb.or(parts.join(","));
+      qb = qb.eq("id", "00000000-0000-0000-0000-000000000000");
     }
   }
   if (data.tagPhones !== null && data.tagPhones !== undefined) {
