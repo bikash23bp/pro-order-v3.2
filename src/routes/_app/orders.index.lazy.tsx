@@ -196,6 +196,7 @@ const PIPELINE_TABS: TabDef[] = [
   { key: "out_of_stock",  label: "Out of Stock",   color: "purple" },
   { key: "sent_to_partner", label: "Sent to Partner", color: "teal" },
   { key: "shipped",       label: "Shipped",        color: "teal" },
+  { key: "steadfast",     label: "Steadfast",      color: "indigo" },
   { key: "completed",     label: "Completed",      color: "green" },
   { key: "cancelled",     label: "Cancelled",      color: "zinc" },
   { key: "cancel_request", label: "Cancel Request", color: "rose" },
