@@ -839,7 +839,7 @@ function OrdersPage() {
     queryFn: async () => {
       const out: Record<string, number> = {};
       // one HEAD count per reason + one for "no reason" (small, parallel).
-      const jobs: Promise<void>[] = [];
+      const jobs: PromiseLike<void>[] = [];
       for (const r of activeCancelReasons) {
         jobs.push(
           supabase
