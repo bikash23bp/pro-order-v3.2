@@ -809,6 +809,61 @@ function OrdersPage() {
     if (statusReconcileTimerRef.current) clearTimeout(statusReconcileTimerRef.current);
   }, []);
 
+  // ---- Cancel reasons: list + per-reason counts for the Cancelled sub-tabs ----
+  const cancelReasonsQuery = useQuery({
+    queryKey: ["cancel-reasons", "active"],
+    enabled: !!session,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("cancel_reasons")
+        .select("id,label,active,sort_order")
+        .eq("active", true)
+        .order("sort_order", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as { id: string; label: string; active: boolean; sort_order: number }[];
+    },
+  });
+  const activeCancelReasons = cancelReasonsQuery.data ?? [];
+
+  // Only fetch sub-tab counts when the user is inside the Cancelled section.
+  const isOnCancelledTab =
+    effectiveStatusFilter === "cancelled" ||
+    effectiveStatusFilter === "cancelled_no_reason" ||
+    effectiveStatusFilter.startsWith("cancelled_reason:");
+
+  const cancelReasonCountsQuery = useQuery({
+    queryKey: ["orders", "cancel-reason-counts", { reasonIds: activeCancelReasons.map((r) => r.id).sort() }],
+    enabled: !!session && isOnCancelledTab && cancelReasonsQuery.isSuccess,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const out: Record<string, number> = {};
+      // one HEAD count per reason + one for "no reason" (small, parallel).
+      const jobs: Promise<void>[] = [];
+      for (const r of activeCancelReasons) {
+        jobs.push(
+          supabase
+            .from("orders")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "cancelled")
+            .eq("cancel_reason_id", r.id)
+            .then(({ count }) => { out[r.id] = count ?? 0; }),
+        );
+      }
+      jobs.push(
+        supabase
+          .from("orders")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "cancelled")
+          .is("cancel_reason_id", null)
+          .then(({ count }) => { out["__no_reason__"] = count ?? 0; }),
+      );
+      await Promise.all(jobs);
+      return out;
+    },
+  });
+  const cancelReasonCounts = cancelReasonCountsQuery.data ?? {};
+
   // Clear selection when filters/page change to avoid cross-page partial bulks.
   useEffect(() => {
     setSelected(new Set());
