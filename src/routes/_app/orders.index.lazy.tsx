@@ -39,6 +39,7 @@ import { importTelesalesCustomers } from "@/lib/telesales.functions";
 import { syncAllCourierStatuses } from "@/lib/courier-sync.functions";
 import { useOrderTemplate } from "@/hooks/use-order-template";
 import { checkBlockedPhones, blockCustomer } from "@/lib/blocked-customers.functions";
+import { computeOrderSearchPhone, ORDER_SEARCH_DEBOUNCE_MS } from "@/lib/order-search";
 
 const EditOrderDialog = lazy(() =>
   import("@/components/orders/EditOrderDialog").then((m) => ({ default: m.EditOrderDialog })),
@@ -444,12 +445,9 @@ function OrdersPage() {
   // A short trailing debounce coalesces rapid keystrokes into a single query,
   // and clearing the input flushes immediately so results reset without delay.
   useEffect(() => {
-    const raw = q.trim();
-    if (!raw) { setDebouncedQ(""); return; }
-    const normalizedPhone = normalizeBDPhone(raw);
-    const next = normalizedPhone.length === 11 && normalizedPhone.startsWith("01") ? normalizedPhone : "";
+    const next = computeOrderSearchPhone(q);
     if (!next) { setDebouncedQ(""); return; }
-    const t = setTimeout(() => setDebouncedQ(next), 120);
+    const t = setTimeout(() => setDebouncedQ(next), ORDER_SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [q]);
 
@@ -619,7 +617,7 @@ function OrdersPage() {
   // Pending search intent: user typed something that is not yet reflected in
   // the active query (either still typing, or debounce not flushed). Used to
   // show the skeleton indicator instantly rather than waiting for the fetch.
-  const searchPending = q.trim().length > 0 && normalizeBDPhone(q.trim()) !== debouncedQ;
+  const searchPending = q.trim().length > 0 && computeOrderSearchPhone(q) !== debouncedQ;
   const loading = (ordersQuery.isPending && !ordersQuery.data) || (searchPending && !ordersQuery.data);
   const refreshing = (ordersQuery.isFetching && !loading) || searchPending;
   const listTimedOut = Boolean((ordersQuery.data as { timedOut?: boolean } | undefined)?.timedOut);
