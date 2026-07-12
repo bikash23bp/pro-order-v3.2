@@ -180,7 +180,6 @@ function applyCommonFilters(qb: any, data: z.infer<typeof OrdersInput>) {
   const sRaw = data.q.trim();
   const s = toAsciiDigits(sRaw);
   if (s) {
-    const digits = s.replace(/\D/g, "");
     const normPhone = normalizeBDPhone(sRaw);
     // Search ONLY by complete normalized phone for maximum speed.
     // No name/order/customer_phone ILIKE fallback: those force slower scans.
