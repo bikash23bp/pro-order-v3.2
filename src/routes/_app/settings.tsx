@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ThemePicker } from "@/components/settings/ThemePicker";
 import { NoticesManagerCard } from "@/components/settings/NoticesManagerCard";
+import { CancelReasonsCard } from "@/components/settings/CancelReasonsCard";
 import { AvatarUploader } from "@/components/users/AvatarUploader";
 
 import { uploadAvatar } from "@/lib/avatar-upload";
@@ -184,6 +185,7 @@ function SettingsPage() {
 
           {permissions?.can_access_settings && <BusinessInfoCard />}
           {permissions?.can_access_settings && <FraudCheckerCard />}
+          {permissions?.can_access_settings && <CancelReasonsCard />}
           {(role === "business_owner" || role === "admin" || permissions?.can_manage_notices) && <NoticesManagerCard />}
 
 

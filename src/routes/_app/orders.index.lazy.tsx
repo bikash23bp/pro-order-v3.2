@@ -28,6 +28,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { DuplicateBadge } from "@/components/orders/DuplicateBadge";
+import { CancelReasonDialog } from "@/components/orders/CancelReasonDialog";
 import { listAllTagsByPhone, normalizePhoneKey, CUSTOMER_TAGS, TAG_LABEL, type CustomerTag } from "@/lib/tags.functions";
 import { getDuplicatePhones } from "@/lib/duplicates.functions";
 import { normalizePhoneClient } from "@/lib/duplicates.shared";
@@ -337,6 +338,13 @@ function OrdersPage() {
   const [profilePhone, setProfilePhone] = useState<string | null>(null);
   const [editing, setEditing] = useState<EditableOrder | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Cancel-reason prompt state. When set, we open the dialog and, on confirm,
+  // apply the cancellation (single or bulk) with the chosen reason.
+  const [cancelPrompt, setCancelPrompt] = useState<
+    | { mode: "single"; id: string; prev: OrderStatus }
+    | { mode: "bulk"; ids: string[] }
+    | null
+  >(null);
   const [bulkStatus, setBulkStatus] = useState<string>("");
   const [bulkBusy, setBulkBusy] = useState(false);
   const [sources, setSources] = useState<{ id: string; name: string }[]>([]);
@@ -801,6 +809,61 @@ function OrdersPage() {
     if (statusReconcileTimerRef.current) clearTimeout(statusReconcileTimerRef.current);
   }, []);
 
+  // ---- Cancel reasons: list + per-reason counts for the Cancelled sub-tabs ----
+  const cancelReasonsQuery = useQuery({
+    queryKey: ["cancel-reasons", "active"],
+    enabled: !!session,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("cancel_reasons")
+        .select("id,label,active,sort_order")
+        .eq("active", true)
+        .order("sort_order", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as { id: string; label: string; active: boolean; sort_order: number }[];
+    },
+  });
+  const activeCancelReasons = cancelReasonsQuery.data ?? [];
+
+  // Only fetch sub-tab counts when the user is inside the Cancelled section.
+  const isOnCancelledTab =
+    effectiveStatusFilter === "cancelled" ||
+    effectiveStatusFilter === "cancelled_no_reason" ||
+    effectiveStatusFilter.startsWith("cancelled_reason:");
+
+  const cancelReasonCountsQuery = useQuery({
+    queryKey: ["orders", "cancel-reason-counts", { reasonIds: activeCancelReasons.map((r) => r.id).sort() }],
+    enabled: !!session && isOnCancelledTab && cancelReasonsQuery.isSuccess,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const out: Record<string, number> = {};
+      // one HEAD count per reason + one for "no reason" (small, parallel).
+      const jobs: PromiseLike<void>[] = [];
+      for (const r of activeCancelReasons) {
+        jobs.push(
+          supabase
+            .from("orders")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "cancelled")
+            .eq("cancel_reason_id", r.id)
+            .then(({ count }) => { out[r.id] = count ?? 0; }),
+        );
+      }
+      jobs.push(
+        supabase
+          .from("orders")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "cancelled")
+          .is("cancel_reason_id", null)
+          .then(({ count }) => { out["__no_reason__"] = count ?? 0; }),
+      );
+      await Promise.all(jobs);
+      return out;
+    },
+  });
+  const cancelReasonCounts = cancelReasonCountsQuery.data ?? {};
+
   // Clear selection when filters/page change to avoid cross-page partial bulks.
   useEffect(() => {
     setSelected(new Set());
@@ -870,6 +933,11 @@ function OrdersPage() {
     if (tab === "sent_to_partner_pending") return !!(r as { forwarded_to_partner_at?: string | null }).forwarded_to_partner_at && r.status === "pending";
     if (tab === "sent_to_partner_ready_to_ship") return !!(r as { forwarded_to_partner_at?: string | null }).forwarded_to_partner_at && r.status === "ready_to_ship";
     if (tab === "sent_to_partner_cancelled") return !!(r as { forwarded_to_partner_at?: string | null }).forwarded_to_partner_at && r.status === "cancelled";
+    if (tab === "cancelled_no_reason") return r.status === "cancelled" && !(r as { cancel_reason_id?: string | null }).cancel_reason_id;
+    if (tab.startsWith("cancelled_reason:")) {
+      const id = tab.slice("cancelled_reason:".length);
+      return r.status === "cancelled" && (r as { cancel_reason_id?: string | null }).cancel_reason_id === id;
+    }
     return r.status === tab;
   };
 
@@ -1014,6 +1082,10 @@ function OrdersPage() {
 
         if (!confirm(`This order is already ${STATUS_LABEL[prev]}. Move it back to ${STATUS_LABEL[status as OrderStatus]}? Stock will be re-deducted if applicable.`)) return;
 
+      } else if (status === "cancelled" && !TERMINAL.includes(prev)) {
+        // Ask for a reason before cancelling — the dialog handles the DB update.
+        setCancelPrompt({ mode: "single", id, prev });
+        return;
       } else if (DESTRUCTIVE.includes(status as OrderStatus) && !TERMINAL.includes(prev)) {
 
         if (!confirm(`Mark this order as ${STATUS_LABEL[status as OrderStatus]}? Stock will be restored.`)) return;
@@ -1123,6 +1195,10 @@ function OrdersPage() {
 
   const applyBulkStatus = async () => {
     if (!bulkStatus || selected.size === 0) return;
+    if (bulkStatus === "cancelled") {
+      setCancelPrompt({ mode: "bulk", ids: Array.from(selected) });
+      return;
+    }
     const DESTRUCTIVE: OrderStatus[] = ["cancelled", "fraud", "returned"];
     if (DESTRUCTIVE.includes(bulkStatus as OrderStatus)) {
       if (!confirm(`Mark ${selected.size} order(s) as ${STATUS_LABEL[bulkStatus as OrderStatus]}? Stock will be restored for active ones.`)) return;
@@ -1159,6 +1235,64 @@ function OrdersPage() {
     toast.success(`${ids.length} order(s) deleted`);
     setSelected(new Set());
     load();
+  };
+
+  // ------- Cancel-reason confirm handler (single or bulk) -------
+  const confirmCancelWithReason = async (reasonId: string, reasonLabel: string) => {
+    if (!cancelPrompt) return;
+    if (cancelPrompt.mode === "single") {
+      const { id, prev } = cancelPrompt;
+      const { error } = await supabase
+        .from("orders")
+        .update({ status: "cancelled", cancel_reason_id: reasonId, preorder: false } as never)
+        .eq("id", id);
+      if (error) return toast.error(error.message);
+      toast.success(`Cancelled — ${reasonLabel}`);
+      // optimistic list patch (mirrors updateStatus)
+      const listEntries = queryClient.getQueriesData<{ rows: Order[]; totalCount: number } | undefined>({ queryKey: ["orders", "list"] });
+      let movedAmount = 0;
+      for (const [key, value] of listEntries) {
+        if (!value || !Array.isArray(value.rows)) continue;
+        const idx = value.rows.findIndex((r) => r.id === id);
+        if (idx === -1) continue;
+        if (!movedAmount) movedAmount = Number(value.rows[idx].total_amount ?? 0) || 0;
+        const nextRows = value.rows.slice();
+        nextRows[idx] = { ...nextRows[idx], status: "cancelled", cancel_reason_id: reasonId } as Order;
+        queryClient.setQueryData(key, { ...value, rows: nextRows });
+      }
+      // Patch topbar counts (prev bucket -> cancelled)
+      const countsEntries = queryClient.getQueriesData<
+        { tabCountsData: TabCountsData | null; preorderDueCount: number } | undefined
+      >({ queryKey: ["orders", "counts"] });
+      for (const [key, value] of countsEntries) {
+        const tcd = value?.tabCountsData;
+        if (!tcd) continue;
+        const nextByStatus = { ...(tcd.byStatus ?? {}) } as Record<string, { count: number; amount: number }>;
+        const prevBucket = nextByStatus[prev];
+        if (prevBucket) {
+          nextByStatus[prev] = { count: Math.max(0, prevBucket.count - 1), amount: Math.max(0, prevBucket.amount - movedAmount) };
+        }
+        const nb = nextByStatus["cancelled"] ?? { count: 0, amount: 0 };
+        nextByStatus["cancelled"] = { count: nb.count + 1, amount: nb.amount + movedAmount };
+        queryClient.setQueryData(key, { ...value, tabCountsData: { ...tcd, byStatus: nextByStatus } });
+      }
+      // Refresh sub-tab counts
+      queryClient.invalidateQueries({ queryKey: ["orders", "cancel-reason-counts"] });
+      scheduleStatusReconcile();
+      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("orders:changed"));
+    } else {
+      const ids = cancelPrompt.ids;
+      const { error } = await supabase
+        .from("orders")
+        .update({ status: "cancelled", cancel_reason_id: reasonId, preorder: false } as never)
+        .in("id", ids);
+      if (error) return toast.error(error.message);
+      toast.success(`${ids.length} order(s) cancelled — ${reasonLabel}`);
+      setSelected(new Set());
+      setBulkStatus("");
+      queryClient.invalidateQueries({ queryKey: ["orders", "cancel-reason-counts"] });
+      load();
+    }
   };
 
   const submitBulkBlock = async () => {
@@ -1711,6 +1845,38 @@ function OrdersPage() {
             })}
           </div>
         )}
+        {isOnCancelledTab && (
+          <div className="flex flex-wrap items-center gap-1.5 px-3 sm:px-4 py-2 border-y bg-rose-500/10">
+            <span className="text-[11px] font-semibold text-rose-700 dark:text-rose-300 mr-1">Cancelled সাব-ফিল্টার:</span>
+            {[
+              { key: "cancelled", label: "All", count: tabCountFor("cancelled") },
+              ...activeCancelReasons.map((r) => ({
+                key: `cancelled_reason:${r.id}`,
+                label: r.label,
+                count: cancelReasonCounts[r.id] ?? 0,
+              })),
+              { key: "cancelled_no_reason", label: "No reason", count: cancelReasonCounts["__no_reason__"] ?? 0 },
+            ].map((sf) => {
+              const active = effectiveStatusFilter === sf.key;
+              return (
+                <button
+                  key={sf.key}
+                  type="button"
+                  onClick={() => selectOrderTab(sf.key)}
+                  onMouseEnter={() => prefetchOrderTab(sf.key)}
+                  className={`px-3 py-1 rounded-md border-2 text-[11px] font-semibold transition-colors inline-flex items-center gap-1.5 ${
+                    active
+                      ? "bg-[#00B795] text-white border-[#00B795]"
+                      : "border-rose-500/60 text-rose-800 dark:text-rose-200 hover:bg-rose-500/20"
+                  }`}
+                >
+                  <span>{sf.label}</span>
+                  <span className={`text-[10px] tabular-nums ${active ? "text-white/90" : "opacity-80"}`}>{sf.count}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
         {selected.size > 0 && (
           <div className="sticky top-0 z-30 flex flex-wrap items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 border-y bg-green-600 text-white shadow-sm animate-in slide-in-from-top-2 [&_button]:h-7 [&_button]:px-2 [&_button]:text-[11px] sm:[&_button]:h-8 sm:[&_button]:px-3 sm:[&_button]:text-xs">
             <span className="text-[11px] sm:text-sm font-medium">{selected.size} selected</span>
@@ -2201,6 +2367,16 @@ function OrdersPage() {
           />
         </Suspense>
       )}
+
+      <CancelReasonDialog
+        open={!!cancelPrompt}
+        onOpenChange={(v) => { if (!v) setCancelPrompt(null); }}
+        count={cancelPrompt?.mode === "bulk" ? cancelPrompt.ids.length : 1}
+        onConfirm={async (reasonId, reasonLabel) => {
+          await confirmCancelWithReason(reasonId, reasonLabel);
+          setCancelPrompt(null);
+        }}
+      />
 
       <Dialog open={bulkBlockOpen} onOpenChange={(v) => { if (!bulkBlockBusy) setBulkBlockOpen(v); }}>
         <DialogContent>
