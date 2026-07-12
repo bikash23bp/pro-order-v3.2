@@ -7,8 +7,8 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 const DEFAULT_LOVABLE_PROJECT_ID = "obxcohpzilphezwawhum";
-const PERSONAL_BACKEND_URL = "https://aecaylmfhggcmekzuwcu.supabase.co";
-const PERSONAL_BACKEND_PUBLISHABLE_KEY = "sb_publishable_BXwcJknFSSFeI6FZHaHMnw_mFWT--Vx";
+const PERSONAL_BACKEND_URL = "https://cmqqxjfadpfbtvlykcgz.supabase.co";
+const PERSONAL_BACKEND_PUBLISHABLE_KEY = "sb_publishable_UD-P5lLzKAcjeS4PO2UDmQ_wLhlpuqO";
 
 function cleanEnv(value: string | undefined) {
   let normalized = value?.trim().replace(/^[ '\"]|[ '\"]$/g, "") ?? "";
@@ -27,15 +27,15 @@ function isDefaultLovableBackend(url: string) {
 
 const fallbackSupabaseUrl = cleanEnv(process.env.SUPABASE_URL) || cleanEnv(process.env.VITE_SUPABASE_URL);
 const fallbackSupabasePublishableKey = cleanEnv(process.env.SUPABASE_PUBLISHABLE_KEY) || cleanEnv(process.env.VITE_SUPABASE_PUBLISHABLE_KEY);
-const supabaseUrl = cleanEnv(process.env.PERSONAL_SUPABASE_URL) || (isDefaultLovableBackend(fallbackSupabaseUrl) ? "" : fallbackSupabaseUrl) || PERSONAL_BACKEND_URL;
-const supabasePublishableKey = cleanEnv(process.env.PERSONAL_SUPABASE_PUBLISHABLE_KEY) || (isDefaultLovableBackend(fallbackSupabaseUrl) ? "" : fallbackSupabasePublishableKey) || PERSONAL_BACKEND_PUBLISHABLE_KEY;
+const supabaseUrl = cleanEnv(process.env.AUDIT_SUPABASE_URL) || cleanEnv(process.env.PERSONAL_SUPABASE_URL) || (isDefaultLovableBackend(fallbackSupabaseUrl) ? "" : fallbackSupabaseUrl) || PERSONAL_BACKEND_URL;
+const supabasePublishableKey = cleanEnv(process.env.AUDIT_SUPABASE_PUBLISHABLE_KEY) || cleanEnv(process.env.PERSONAL_SUPABASE_PUBLISHABLE_KEY) || (isDefaultLovableBackend(fallbackSupabaseUrl) ? "" : fallbackSupabasePublishableKey) || PERSONAL_BACKEND_PUBLISHABLE_KEY;
 const supabaseProjectId = supabaseUrl ? new URL(supabaseUrl).hostname.split(".")[0] : cleanEnv(process.env.VITE_SUPABASE_PROJECT_ID);
 
 // Server functions read process.env.SUPABASE_* directly in dev/build. Keep them
 // pinned to the user's personal backend when those secrets are present.
 if (supabaseUrl) process.env.SUPABASE_URL = supabaseUrl;
 if (supabasePublishableKey) process.env.SUPABASE_PUBLISHABLE_KEY = supabasePublishableKey;
-const personalServiceRoleKey = cleanEnv(process.env.PERSONAL_SUPABASE_SERVICE_ROLE_KEY);
+const personalServiceRoleKey = cleanEnv(process.env.AUDIT_SUPABASE_SERVICE_ROLE_KEY) || cleanEnv(process.env.PERSONAL_SUPABASE_SERVICE_ROLE_KEY);
 if (personalServiceRoleKey) process.env.SUPABASE_SERVICE_ROLE_KEY = personalServiceRoleKey;
 
 // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).

@@ -21,12 +21,24 @@ function hydrateProcessEnv(env: unknown) {
   }
 
   const personalBackendAliases: Record<string, string> = {
+    SUPABASE_URL: "AUDIT_SUPABASE_URL",
+    SUPABASE_PUBLISHABLE_KEY: "AUDIT_SUPABASE_PUBLISHABLE_KEY",
+    SUPABASE_SERVICE_ROLE_KEY: "AUDIT_SUPABASE_SERVICE_ROLE_KEY",
+  };
+
+  for (const [target, source] of Object.entries(personalBackendAliases)) {
+    const sourceValue = process.env[source] ? normalizeEnvValue(process.env[source]) : "";
+    if (sourceValue) process.env[target] = sourceValue;
+  }
+
+  const legacyPersonalBackendAliases: Record<string, string> = {
     SUPABASE_URL: "PERSONAL_SUPABASE_URL",
     SUPABASE_PUBLISHABLE_KEY: "PERSONAL_SUPABASE_PUBLISHABLE_KEY",
     SUPABASE_SERVICE_ROLE_KEY: "PERSONAL_SUPABASE_SERVICE_ROLE_KEY",
   };
 
-  for (const [target, source] of Object.entries(personalBackendAliases)) {
+  for (const [target, source] of Object.entries(legacyPersonalBackendAliases)) {
+    if (process.env[target]?.trim()) continue;
     const sourceValue = process.env[source] ? normalizeEnvValue(process.env[source]) : "";
     if (sourceValue) process.env[target] = sourceValue;
   }
