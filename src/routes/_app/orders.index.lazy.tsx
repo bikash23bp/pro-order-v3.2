@@ -933,6 +933,11 @@ function OrdersPage() {
     if (tab === "sent_to_partner_pending") return !!(r as { forwarded_to_partner_at?: string | null }).forwarded_to_partner_at && r.status === "pending";
     if (tab === "sent_to_partner_ready_to_ship") return !!(r as { forwarded_to_partner_at?: string | null }).forwarded_to_partner_at && r.status === "ready_to_ship";
     if (tab === "sent_to_partner_cancelled") return !!(r as { forwarded_to_partner_at?: string | null }).forwarded_to_partner_at && r.status === "cancelled";
+    if (tab === "cancelled_no_reason") return r.status === "cancelled" && !(r as { cancel_reason_id?: string | null }).cancel_reason_id;
+    if (tab.startsWith("cancelled_reason:")) {
+      const id = tab.slice("cancelled_reason:".length);
+      return r.status === "cancelled" && (r as { cancel_reason_id?: string | null }).cancel_reason_id === id;
+    }
     return r.status === tab;
   };
 
