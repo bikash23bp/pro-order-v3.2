@@ -13,6 +13,7 @@ function safeCompare(a: string, b: string) {
 function checkCronAuth(request: Request): Response | null {
   const env = process.env;
   const validKeys = [
+    env.AUDIT_SUPABASE_PUBLISHABLE_KEY,
     env.SUPABASE_PUBLISHABLE_KEY,
     env.SUPABASE_ANON_KEY,
     env.VITE_SUPABASE_PUBLISHABLE_KEY,
