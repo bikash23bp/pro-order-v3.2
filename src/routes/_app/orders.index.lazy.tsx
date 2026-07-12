@@ -338,6 +338,13 @@ function OrdersPage() {
   const [profilePhone, setProfilePhone] = useState<string | null>(null);
   const [editing, setEditing] = useState<EditableOrder | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Cancel-reason prompt state. When set, we open the dialog and, on confirm,
+  // apply the cancellation (single or bulk) with the chosen reason.
+  const [cancelPrompt, setCancelPrompt] = useState<
+    | { mode: "single"; id: string; prev: OrderStatus }
+    | { mode: "bulk"; ids: string[] }
+    | null
+  >(null);
   const [bulkStatus, setBulkStatus] = useState<string>("");
   const [bulkBusy, setBulkBusy] = useState(false);
   const [sources, setSources] = useState<{ id: string; name: string }[]>([]);
