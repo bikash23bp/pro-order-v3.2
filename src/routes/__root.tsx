@@ -16,8 +16,8 @@ import { AuthProvider } from "@/hooks/use-auth";
 
 import appCss from "../styles.css?url";
 
-const PERSONAL_BACKEND_URL = "https://cmqqxjfadpfbtvlykcgz.supabase.co";
-const PERSONAL_BACKEND_PUBLISHABLE_KEY = "sb_publishable_UD-P5lLzKAcjeS4PO2UDmQ_wLhlpuqO";
+const PERSONAL_BACKEND_URL = "https://aecaylmfhggcmekzuwcu.supabase.co";
+const PERSONAL_BACKEND_PUBLISHABLE_KEY = "sb_publishable_BXwcJknFSSFeI6FZHaHMnw_mFWT--Vx";
 
 function getPublicRuntimeEnvScript() {
   const env = typeof process !== "undefined" ? process.env : {};

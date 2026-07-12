@@ -7,8 +7,8 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 const DEFAULT_LOVABLE_PROJECT_ID = "obxcohpzilphezwawhum";
-const PERSONAL_BACKEND_URL = "https://cmqqxjfadpfbtvlykcgz.supabase.co";
-const PERSONAL_BACKEND_PUBLISHABLE_KEY = "sb_publishable_UD-P5lLzKAcjeS4PO2UDmQ_wLhlpuqO";
+const PERSONAL_BACKEND_URL = "https://aecaylmfhggcmekzuwcu.supabase.co";
+const PERSONAL_BACKEND_PUBLISHABLE_KEY = "sb_publishable_BXwcJknFSSFeI6FZHaHMnw_mFWT--Vx";
 
 function cleanEnv(value: string | undefined) {
   let normalized = value?.trim().replace(/^[ '\"]|[ '\"]$/g, "") ?? "";
