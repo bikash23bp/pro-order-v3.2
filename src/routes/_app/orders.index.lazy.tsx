@@ -1947,6 +1947,37 @@ function OrdersPage() {
             })}
           </div>
         )}
+        {isOnSteadfastTab && (
+          <div className="flex flex-wrap items-center gap-1.5 px-3 sm:px-4 py-2 border-y bg-indigo-500/10">
+            <span className="text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 mr-1">Steadfast সাব-ফিল্টার:</span>
+            {[
+              { key: "steadfast", label: "All", count: steadfastCounts["__all__"] ?? (steadfastTopCountQuery.data ?? 0) },
+              ...STEADFAST_STATUSES.map((s) => ({
+                key: `steadfast_status:${s.key}`,
+                label: s.label,
+                count: steadfastCounts[s.key] ?? 0,
+              })),
+            ].map((sf) => {
+              const active = effectiveStatusFilter === sf.key;
+              return (
+                <button
+                  key={sf.key}
+                  type="button"
+                  onClick={() => selectOrderTab(sf.key)}
+                  onMouseEnter={() => prefetchOrderTab(sf.key)}
+                  className={`px-3 py-1 rounded-md border-2 text-[11px] font-semibold transition-colors inline-flex items-center gap-1.5 ${
+                    active
+                      ? "bg-[#00B795] text-white border-[#00B795]"
+                      : "border-indigo-500/60 text-indigo-800 dark:text-indigo-200 hover:bg-indigo-500/20"
+                  }`}
+                >
+                  <span>{sf.label}</span>
+                  <span className={`text-[10px] tabular-nums ${active ? "text-white/90" : "opacity-80"}`}>{sf.count}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
         {selected.size > 0 && (
           <div className="sticky top-0 z-30 flex flex-wrap items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 border-y bg-green-600 text-white shadow-sm animate-in slide-in-from-top-2 [&_button]:h-7 [&_button]:px-2 [&_button]:text-[11px] sm:[&_button]:h-8 sm:[&_button]:px-3 sm:[&_button]:text-xs">
             <span className="text-[11px] sm:text-sm font-medium">{selected.size} selected</span>
