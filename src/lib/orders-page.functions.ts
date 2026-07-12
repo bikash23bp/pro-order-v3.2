@@ -229,6 +229,16 @@ function applyFilters(qb: any, data: z.infer<typeof OrdersInput>) {
   if (data.status === "sent_to_partner_cancelled") return qb.not("forwarded_to_partner_at", "is", null).eq("status", "cancelled");
   if (data.status === "all") return qb;
 
+  // Steadfast pipeline tab: shipped orders that have received a raw courier state.
+  if (data.status === "steadfast") return qb.eq("status", "shipped").not("courier_status", "is", null);
+  if (typeof data.status === "string" && data.status.startsWith("steadfast_status:")) {
+    const cs = data.status.slice("steadfast_status:".length);
+    return qb.eq("status", "shipped").eq("courier_status", cs);
+  }
+  // "Shipped" tab excludes orders that already have a courier response —
+  // those move to the Steadfast tab.
+  if (data.status === "shipped") return qb.eq("status", "shipped").is("courier_status", null);
+
   // Cancel-reason sub-tabs under the main "Cancelled" tile.
   if (typeof data.status === "string" && data.status.startsWith("cancelled_reason:")) {
     const id = data.status.slice("cancelled_reason:".length);
@@ -258,6 +268,8 @@ function isSingleStatusFilter(status: string): boolean {
     case "preorder":
     case "sent_to_partner":
     case "incomplete":
+      return false;
+    case "steadfast":
       return false;
     default:
       return true;
