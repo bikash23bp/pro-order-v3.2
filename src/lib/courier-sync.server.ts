@@ -39,6 +39,28 @@ export type SyncResult = {
 
 const STEADFAST_DEFAULT_BASE = "https://portal.packzy.com/api/v1";
 
+async function writeAuditLog(row: {
+  order_id: string;
+  courier_id: string | null;
+  provider: string | null;
+  consignment_id: string | null;
+  delivery_status: string | null;
+  old_status: string | null;
+  new_status: string | null;
+  old_courier_status: string | null;
+  new_courier_status: string | null;
+  changed: boolean;
+  ok: boolean;
+  error: string | null;
+  raw_response: unknown;
+}): Promise<void> {
+  try {
+    await supabaseAdmin.from("courier_sync_audit").insert(row as never);
+  } catch {
+    // Never let audit failures break the sync flow.
+  }
+}
+
 function detectProvider(name: string | null | undefined): "steadfast" | "pathao" | "redx" | "unknown" {
   const n = (name ?? "").toLowerCase();
   if (n.includes("steadfast") || n.includes("packzy")) return "steadfast";
@@ -81,7 +103,7 @@ async function fetchSteadfastStatus(
   apiKey: string,
   secretKey: string,
   consignmentId: string,
-): Promise<{ ok: true; delivery_status: string } | { ok: false; error: string; statusCode?: number }> {
+): Promise<{ ok: true; delivery_status: string; raw: unknown } | { ok: false; error: string; statusCode?: number; raw: unknown }> {
   const url = `${baseUrl.replace(/\/$/, "")}/status_by_cid/${encodeURIComponent(consignmentId)}`;
   try {
     const controller = new AbortController();
@@ -97,15 +119,16 @@ async function fetchSteadfastStatus(
     const text = await r.text();
     let json: { status?: number | string; delivery_status?: string; message?: string } = {};
     try { json = JSON.parse(text); } catch { /* keep raw */ }
+    const raw: unknown = Object.keys(json).length ? json : { body: text.slice(0, 500) };
     if (!r.ok) {
-      return { ok: false, error: json.message ?? `HTTP ${r.status}: ${text.slice(0, 200)}`, statusCode: r.status };
+      return { ok: false, error: json.message ?? `HTTP ${r.status}: ${text.slice(0, 200)}`, statusCode: r.status, raw };
     }
     if (!json.delivery_status) {
-      return { ok: false, error: `No delivery_status in response: ${text.slice(0, 200)}` };
+      return { ok: false, error: `No delivery_status in response: ${text.slice(0, 200)}`, raw };
     }
-    return { ok: true, delivery_status: json.delivery_status };
+    return { ok: true, delivery_status: json.delivery_status, raw };
   } catch (e) {
-    return { ok: false, error: `Network error: ${(e as Error).message}` };
+    return { ok: false, error: `Network error: ${(e as Error).message}`, raw: null };
   }
 }
 
@@ -141,6 +164,13 @@ export async function syncOneOrder(supabase: Sb, orderId: string): Promise<SyncR
     return { orderId, ok: true, changed: false, oldStatus: order.status, error: `Order status "${order.status}" not syncable` };
   }
   if (!order.consignment_id) {
+    await writeAuditLog({
+      order_id: order.id, courier_id: order.courier_id, provider: null,
+      consignment_id: null, delivery_status: null,
+      old_status: order.status, new_status: null,
+      old_courier_status: order.courier_status, new_courier_status: null,
+      changed: false, ok: false, error: "Order has no consignment_id", raw_response: null,
+    });
     return { orderId, ok: false, changed: false, oldStatus: order.status, error: "Order has no consignment_id" };
   }
   let courier: CourierRow | null = null;
@@ -187,6 +217,13 @@ export async function syncOneOrder(supabase: Sb, orderId: string): Promise<SyncR
     }
   }
   if (!resp.ok) {
+    await writeAuditLog({
+      order_id: order.id, courier_id: courier.id, provider,
+      consignment_id: order.consignment_id, delivery_status: null,
+      old_status: order.status, new_status: null,
+      old_courier_status: order.courier_status, new_courier_status: null,
+      changed: false, ok: false, error: resp.error, raw_response: resp.raw ?? null,
+    });
     return { orderId, ok: false, changed: false, provider, oldStatus: order.status, error: resp.error };
   }
 
@@ -200,7 +237,23 @@ export async function syncOneOrder(supabase: Sb, orderId: string): Promise<SyncR
       .from("orders")
       .update({ status: mapped.orderStatus, courier_status: null, internal_note: nextNote } as never)
       .eq("id", order.id);
-    if (updErr) return { orderId, ok: false, changed: false, provider, oldStatus: order.status, error: updErr.message };
+    if (updErr) {
+      await writeAuditLog({
+        order_id: order.id, courier_id: courier.id, provider,
+        consignment_id: order.consignment_id, delivery_status: resp.delivery_status,
+        old_status: order.status, new_status: null,
+        old_courier_status: order.courier_status, new_courier_status: null,
+        changed: false, ok: false, error: updErr.message, raw_response: resp.raw,
+      });
+      return { orderId, ok: false, changed: false, provider, oldStatus: order.status, error: updErr.message };
+    }
+    await writeAuditLog({
+      order_id: order.id, courier_id: courier.id, provider,
+      consignment_id: order.consignment_id, delivery_status: resp.delivery_status,
+      old_status: order.status, new_status: mapped.orderStatus,
+      old_courier_status: order.courier_status, new_courier_status: null,
+      changed: true, ok: true, error: null, raw_response: resp.raw,
+    });
     return { orderId, ok: true, changed: true, provider, oldStatus: order.status, newStatus: mapped.orderStatus, delivery_status: resp.delivery_status };
   }
 
@@ -210,10 +263,33 @@ export async function syncOneOrder(supabase: Sb, orderId: string): Promise<SyncR
       .from("orders")
       .update({ courier_status: mapped.courierStatus } as never)
       .eq("id", order.id);
-    if (updErr) return { orderId, ok: false, changed: false, provider, oldStatus: order.status, error: updErr.message };
+    if (updErr) {
+      await writeAuditLog({
+        order_id: order.id, courier_id: courier.id, provider,
+        consignment_id: order.consignment_id, delivery_status: resp.delivery_status,
+        old_status: order.status, new_status: null,
+        old_courier_status: order.courier_status, new_courier_status: mapped.courierStatus,
+        changed: false, ok: false, error: updErr.message, raw_response: resp.raw,
+      });
+      return { orderId, ok: false, changed: false, provider, oldStatus: order.status, error: updErr.message };
+    }
+    await writeAuditLog({
+      order_id: order.id, courier_id: courier.id, provider,
+      consignment_id: order.consignment_id, delivery_status: resp.delivery_status,
+      old_status: order.status, new_status: null,
+      old_courier_status: order.courier_status, new_courier_status: mapped.courierStatus,
+      changed: true, ok: true, error: null, raw_response: resp.raw,
+    });
     return { orderId, ok: true, changed: true, provider, oldStatus: order.status, delivery_status: resp.delivery_status };
   }
 
+  await writeAuditLog({
+    order_id: order.id, courier_id: courier.id, provider,
+    consignment_id: order.consignment_id, delivery_status: resp.delivery_status,
+    old_status: order.status, new_status: null,
+    old_courier_status: order.courier_status, new_courier_status: order.courier_status,
+    changed: false, ok: true, error: null, raw_response: resp.raw,
+  });
   return { orderId, ok: true, changed: false, provider, oldStatus: order.status, delivery_status: resp.delivery_status };
 }
 
