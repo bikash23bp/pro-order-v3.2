@@ -1177,6 +1177,64 @@ function OrdersPage() {
     load();
   };
 
+  // ------- Cancel-reason confirm handler (single or bulk) -------
+  const confirmCancelWithReason = async (reasonId: string, reasonLabel: string) => {
+    if (!cancelPrompt) return;
+    if (cancelPrompt.mode === "single") {
+      const { id, prev } = cancelPrompt;
+      const { error } = await supabase
+        .from("orders")
+        .update({ status: "cancelled", cancel_reason_id: reasonId, preorder: false } as never)
+        .eq("id", id);
+      if (error) return toast.error(error.message);
+      toast.success(`Cancelled — ${reasonLabel}`);
+      // optimistic list patch (mirrors updateStatus)
+      const listEntries = queryClient.getQueriesData<{ rows: Order[]; totalCount: number } | undefined>({ queryKey: ["orders", "list"] });
+      let movedAmount = 0;
+      for (const [key, value] of listEntries) {
+        if (!value || !Array.isArray(value.rows)) continue;
+        const idx = value.rows.findIndex((r) => r.id === id);
+        if (idx === -1) continue;
+        if (!movedAmount) movedAmount = Number(value.rows[idx].total_amount ?? 0) || 0;
+        const nextRows = value.rows.slice();
+        nextRows[idx] = { ...nextRows[idx], status: "cancelled", cancel_reason_id: reasonId } as Order;
+        queryClient.setQueryData(key, { ...value, rows: nextRows });
+      }
+      // Patch topbar counts (prev bucket -> cancelled)
+      const countsEntries = queryClient.getQueriesData<
+        { tabCountsData: TabCountsData | null; preorderDueCount: number } | undefined
+      >({ queryKey: ["orders", "counts"] });
+      for (const [key, value] of countsEntries) {
+        const tcd = value?.tabCountsData;
+        if (!tcd) continue;
+        const nextByStatus = { ...(tcd.byStatus ?? {}) } as Record<string, { count: number; amount: number }>;
+        const prevBucket = nextByStatus[prev];
+        if (prevBucket) {
+          nextByStatus[prev] = { count: Math.max(0, prevBucket.count - 1), amount: Math.max(0, prevBucket.amount - movedAmount) };
+        }
+        const nb = nextByStatus["cancelled"] ?? { count: 0, amount: 0 };
+        nextByStatus["cancelled"] = { count: nb.count + 1, amount: nb.amount + movedAmount };
+        queryClient.setQueryData(key, { ...value, tabCountsData: { ...tcd, byStatus: nextByStatus } });
+      }
+      // Refresh sub-tab counts
+      queryClient.invalidateQueries({ queryKey: ["orders", "cancel-reason-counts"] });
+      scheduleStatusReconcile();
+      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("orders:changed"));
+    } else {
+      const ids = cancelPrompt.ids;
+      const { error } = await supabase
+        .from("orders")
+        .update({ status: "cancelled", cancel_reason_id: reasonId, preorder: false } as never)
+        .in("id", ids);
+      if (error) return toast.error(error.message);
+      toast.success(`${ids.length} order(s) cancelled — ${reasonLabel}`);
+      setSelected(new Set());
+      setBulkStatus("");
+      queryClient.invalidateQueries({ queryKey: ["orders", "cancel-reason-counts"] });
+      load();
+    }
+  };
+
   const submitBulkBlock = async () => {
     const reason = bulkBlockReason.trim();
     if (!reason) return toast.error("Reason is required");
