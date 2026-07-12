@@ -141,7 +141,13 @@ export const forwardOrder = createServerFn({ method: "POST" })
     }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as any;
+    const userSupabase = context.supabase as any;
+    const { data: canForward } = await userSupabase
+      .rpc("user_has_permission", { _user_id: context.userId, _perm: "can_forward_orders" });
+    if (!canForward) throw new Error("Forbidden");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const supabase = supabaseAdmin as any;
     const { data: dests, error: dErr } = await supabase
       .from("oms_destinations")
       .select("id, name, url, api_token, active")
@@ -162,7 +168,13 @@ export const autoForwardNewOrder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ orderId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as any;
+    const userSupabase = context.supabase as any;
+    const { data: canForward } = await userSupabase
+      .rpc("user_has_permission", { _user_id: context.userId, _perm: "can_forward_orders" });
+    if (!canForward) return { skipped: true, reason: "No permission to auto-forward" };
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const supabase = supabaseAdmin as any;
 
     // Loop-prevention: don't auto-forward orders that came from another OMS.
     const { data: order } = await supabase
@@ -196,7 +208,11 @@ export const testOmsDestination = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
     z.object({ url: z.string().url(), api_token: z.string().min(1) }).parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const { data: canManage } = await (context.supabase as any)
+      .rpc("user_has_permission", { _user_id: context.userId, _perm: "can_manage_oms_endpoints" });
+    if (!canManage) throw new Error("Forbidden");
+
     // SSRF guard: only allow https public hosts. Block localhost, private,
     // and cloud-metadata ranges so an attacker can't probe internal services.
     try {
