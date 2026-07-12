@@ -440,37 +440,19 @@ function OrdersPage() {
     return () => { cancelled = true; };
   }, [session, search.dup, fetchDupes, getFilterOptions, fetchSites]);
 
-  // Debounce search input — avoid refetch on every keystroke.
-  // Also skip filtering when the term is too short to be selective
-  // (pg_trgm indexes don't help for 1-char queries and short digit-runs
-  // match too many rows). In that case treat the search as empty.
+  // Phone-only search: query only after a complete normalized BD number exists.
+  // This avoids slow name/order/partial-phone scans and fires instantly at completion.
   useEffect(() => {
     const raw = q.trim();
     if (!raw) { setDebouncedQ(""); return; }
-    const s = toAsciiDigits(raw);
-    const digits = s.replace(/\D/g, "");
-    const isAllDigits = digits.length === s.length;
-    const passes = isAllDigits ? digits.length >= 3 : s.length >= 2;
-    // Instant fire for a complete BD phone (11 digits starting with 01)
-    // or a plausibly-complete order number (>=5 digits). Otherwise a very
-    // short debounce so results feel like they land as typing stops.
-    const instant = isAllDigits && (
-      (digits.length === 11 && digits.startsWith("01")) ||
-      digits.length >= 5
-    );
-    if (instant) {
-      setDebouncedQ(passes ? raw : "");
-      return;
-    }
-    const t = setTimeout(() => {
-      setDebouncedQ(passes ? raw : "");
-    }, 150);
-    return () => clearTimeout(t);
+    const normalizedPhone = normalizeBDPhone(raw);
+    setDebouncedQ(normalizedPhone.length === 11 && normalizedPhone.startsWith("01") ? normalizedPhone : "");
   }, [q]);
 
   // Slower debounce for the exact-count RPC so typing doesn't refire the
   // aggregation on every keystroke; keepPreviousData keeps the pills stable.
   useEffect(() => {
+    if (!debouncedQ) { setCountsDebouncedQ(""); return; }
     const t = setTimeout(() => setCountsDebouncedQ(debouncedQ), 500);
     return () => clearTimeout(t);
   }, [debouncedQ]);
@@ -542,29 +524,8 @@ function OrdersPage() {
              .lte("created_at", dateRange.to.toISOString());
     }
     if (advanceOnly) qb = qb.gt("advance_amount", 0);
-    const sRaw = debouncedQ;
-    if (sRaw) {
-      const s = toAsciiDigits(sRaw);
-      const safe = s.replace(/[%,()]/g, "");
-      const digits = s.replace(/\D/g, "");
-      const normPhone = normalizeBDPhone(sRaw);
-      const parts: string[] = [`customer_name.ilike.%${safe}%`];
-      if (normPhone.length === 11 && normPhone.startsWith("01")) {
-        const tail = normPhone.slice(-8);
-        parts.push(`phone_normalized.eq.${normPhone}`);
-        parts.push(`phone_normalized.ilike.%${tail}%`);
-        parts.push(`customer_phone.ilike.%${tail}%`);
-      } else if (digits.length >= 3) {
-        const needle = digits.length >= 8 ? digits.slice(-8) : digits;
-        parts.push(`customer_phone.ilike.%${needle}%`);
-        parts.push(`phone_normalized.ilike.%${needle}%`);
-        if (/^\d+$/.test(digits) && digits.length <= 9) {
-          parts.push(`order_number.eq.${parseInt(digits, 10)}`);
-        }
-      } else {
-        parts.push(`customer_phone.ilike.%${safe}%`);
-      }
-      qb = qb.or(parts.join(","));
+    if (debouncedQ) {
+      qb = qb.eq("phone_normalized", debouncedQ);
     }
     if (tagPhoneFilter !== null) {
       if (tagPhoneFilter.length === 0) {
@@ -623,7 +584,7 @@ function OrdersPage() {
 
   // Warm the cache for a tab on hover/mousedown so click feels instant.
   const prefetchOrderTab = (status: string) => {
-    if (!session) return;
+    if (!session || debouncedQ) return;
     const key = [
       "orders", "list",
       { status, page: 1, limit, source: sourceFilter, site: siteFilter, courier: courierFilter,
@@ -688,7 +649,7 @@ function OrdersPage() {
   // them feels instant. Runs once per filter-set; respects the same stale window.
   const warmedFiltersRef = useRef<string>("");
   useEffect(() => {
-    if (!session || ordersQuery.isPending || !ordersQuery.data) return;
+    if (!session || debouncedQ || ordersQuery.isPending || !ordersQuery.data) return;
     const sig = JSON.stringify({ sourceFilter, siteFilter, courierFilter, partnerFilter, staffFilter, datePreset, fromIso, toIso, debouncedQ, tagPhoneFilter, advanceOnly });
     if (warmedFiltersRef.current === sig) return;
     warmedFiltersRef.current = sig;
@@ -765,7 +726,7 @@ function OrdersPage() {
 
   const countsQuery = useQuery({
     queryKey: countsQueryKey,
-    enabled: !!session && (!search.dup || dupePhonesReady),
+    enabled: !!session && !debouncedQ && (!search.dup || dupePhonesReady),
     staleTime: ORDER_LIST_STALE_MS,
     gcTime: ORDER_LIST_GC_MS,
     refetchOnWindowFocus: true,
@@ -1388,10 +1349,10 @@ function OrdersPage() {
             <div className="col-span-2 flex min-w-0 items-center gap-1 sm:flex-1 sm:min-w-[200px] sm:gap-1.5">
               <Search className="h-4 w-4 text-muted-foreground shrink-0" />
               <Input
-                placeholder="Search name, phone, #…"
-                aria-label="Search name, phone, order #, ID"
+                placeholder="Search phone number only…"
+                aria-label="Search by phone number"
                 value={q}
-                onChange={(e) => setQ(e.target.value)}
+                onChange={(e) => setQ(toAsciiDigits(e.target.value))}
                 className="h-8 min-w-0 w-full px-2 text-[11px] sm:h-9 sm:max-w-sm sm:px-3 sm:text-sm"
               />
             </div>
