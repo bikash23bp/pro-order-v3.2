@@ -445,15 +445,26 @@ function OrdersPage() {
   // (pg_trgm indexes don't help for 1-char queries and short digit-runs
   // match too many rows). In that case treat the search as empty.
   useEffect(() => {
-    const t = setTimeout(() => {
-      const raw = q.trim();
-      if (!raw) { setDebouncedQ(""); return; }
-      const s = toAsciiDigits(raw);
-      const digits = s.replace(/\D/g, "");
-      const isAllDigits = digits.length === s.length;
-      const passes = isAllDigits ? digits.length >= 3 : s.length >= 2;
+    const raw = q.trim();
+    if (!raw) { setDebouncedQ(""); return; }
+    const s = toAsciiDigits(raw);
+    const digits = s.replace(/\D/g, "");
+    const isAllDigits = digits.length === s.length;
+    const passes = isAllDigits ? digits.length >= 3 : s.length >= 2;
+    // Instant fire for a complete BD phone (11 digits starting with 01)
+    // or a plausibly-complete order number (>=5 digits). Otherwise a very
+    // short debounce so results feel like they land as typing stops.
+    const instant = isAllDigits && (
+      (digits.length === 11 && digits.startsWith("01")) ||
+      digits.length >= 5
+    );
+    if (instant) {
       setDebouncedQ(passes ? raw : "");
-    }, 350);
+      return;
+    }
+    const t = setTimeout(() => {
+      setDebouncedQ(passes ? raw : "");
+    }, 150);
     return () => clearTimeout(t);
   }, [q]);
 
