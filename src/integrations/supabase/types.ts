@@ -242,6 +242,82 @@ export type Database = {
         }
         Relationships: []
       }
+      courier_sync_audit: {
+        Row: {
+          changed: boolean
+          consignment_id: string | null
+          courier_id: string | null
+          created_at: string
+          delivery_status: string | null
+          error: string | null
+          id: string
+          new_courier_status: string | null
+          new_status: string | null
+          ok: boolean
+          old_courier_status: string | null
+          old_status: string | null
+          order_id: string
+          provider: string | null
+          raw_response: Json | null
+        }
+        Insert: {
+          changed?: boolean
+          consignment_id?: string | null
+          courier_id?: string | null
+          created_at?: string
+          delivery_status?: string | null
+          error?: string | null
+          id?: string
+          new_courier_status?: string | null
+          new_status?: string | null
+          ok?: boolean
+          old_courier_status?: string | null
+          old_status?: string | null
+          order_id: string
+          provider?: string | null
+          raw_response?: Json | null
+        }
+        Update: {
+          changed?: boolean
+          consignment_id?: string | null
+          courier_id?: string | null
+          created_at?: string
+          delivery_status?: string | null
+          error?: string | null
+          id?: string
+          new_courier_status?: string | null
+          new_status?: string | null
+          ok?: boolean
+          old_courier_status?: string | null
+          old_status?: string | null
+          order_id?: string
+          provider?: string | null
+          raw_response?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "courier_sync_audit_courier_id_fkey"
+            columns: ["courier_id"]
+            isOneToOne: false
+            referencedRelation: "couriers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "courier_sync_audit_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "incomplete_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "courier_sync_audit_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       couriers: {
         Row: {
           api_key: string | null
