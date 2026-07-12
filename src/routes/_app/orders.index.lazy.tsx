@@ -1034,8 +1034,12 @@ function OrdersPage() {
       else if (tab.key === "sent_to_partner") out[tab.key] = (tabCountsData as any)?.sent_to_partner?.count ?? 0;
       else out[tab.key] = bs[tab.key]?.count ?? 0;
     }
+    // Split the raw "shipped" bucket into: Shipped (no courier response) + Steadfast (with response).
+    const steadfastTop = steadfastTopCountQuery.data ?? 0;
+    out["steadfast"] = steadfastTop;
+    out["shipped"] = Math.max(0, (out["shipped"] ?? 0) - steadfastTop);
     return out;
-  }, [tabCountsData]);
+  }, [tabCountsData, steadfastTopCountQuery.data]);
 
   const tabAmounts = useMemo(() => {
     const out: Record<string, number> = {};
