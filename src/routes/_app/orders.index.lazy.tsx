@@ -39,6 +39,7 @@ import { importTelesalesCustomers } from "@/lib/telesales.functions";
 import { syncAllCourierStatuses } from "@/lib/courier-sync.functions";
 import { useOrderTemplate } from "@/hooks/use-order-template";
 import { checkBlockedPhones, blockCustomer } from "@/lib/blocked-customers.functions";
+import { computeOrderSearchPhone, ORDER_SEARCH_DEBOUNCE_MS } from "@/lib/order-search";
 
 const EditOrderDialog = lazy(() =>
   import("@/components/orders/EditOrderDialog").then((m) => ({ default: m.EditOrderDialog })),
