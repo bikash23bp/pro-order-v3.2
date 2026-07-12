@@ -22,8 +22,9 @@ const PERSONAL_BACKEND_PUBLISHABLE_KEY = "sb_publishable_UD-P5lLzKAcjeS4PO2UDmQ_
 function getPublicRuntimeEnvScript() {
   const env = typeof process !== "undefined" ? process.env : {};
   const viteEnv = import.meta.env;
-  const supabaseUrl = env.AUDIT_SUPABASE_URL || env.SUPABASE_URL || env.VITE_SUPABASE_URL || viteEnv.VITE_SUPABASE_URL || PERSONAL_BACKEND_URL;
-  const supabaseKey = env.AUDIT_SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_ANON_KEY || viteEnv.VITE_SUPABASE_PUBLISHABLE_KEY || viteEnv.VITE_SUPABASE_ANON_KEY || PERSONAL_BACKEND_PUBLISHABLE_KEY;
+  const useAuditBackend = Boolean(env.AUDIT_SUPABASE_URL && env.AUDIT_SUPABASE_PUBLISHABLE_KEY);
+  const supabaseUrl = useAuditBackend ? env.AUDIT_SUPABASE_URL : env.SUPABASE_URL || env.VITE_SUPABASE_URL || viteEnv.VITE_SUPABASE_URL || PERSONAL_BACKEND_URL;
+  const supabaseKey = useAuditBackend ? env.AUDIT_SUPABASE_PUBLISHABLE_KEY : env.SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_ANON_KEY || viteEnv.VITE_SUPABASE_PUBLISHABLE_KEY || viteEnv.VITE_SUPABASE_ANON_KEY || PERSONAL_BACKEND_PUBLISHABLE_KEY;
 
   if (!supabaseUrl || !supabaseKey) return "";
 
