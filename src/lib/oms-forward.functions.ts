@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { buildOrderPayload, sendToDestination } from "./oms-forward.server";
 
 export type ForwardResult = {
   destination_id: string;
@@ -27,6 +26,7 @@ export const forwardOrder = createServerFn({ method: "POST" })
     if (!canForward) throw new Error("Forbidden");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { buildOrderPayload, sendToDestination } = await import("./oms-forward.server");
     const supabase = supabaseAdmin as any;
     const { data: dests, error: dErr } = await supabase
       .from("oms_destinations")
@@ -54,6 +54,7 @@ export const autoForwardNewOrder = createServerFn({ method: "POST" })
     if (!canForward) return { skipped: true, reason: "No permission to auto-forward" };
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { buildOrderPayload, sendToDestination } = await import("./oms-forward.server");
     const supabase = supabaseAdmin as any;
 
     // Loop-prevention: don't auto-forward orders that came from another OMS.

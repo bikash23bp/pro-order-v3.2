@@ -1,4 +1,11 @@
-import type { ForwardResult } from "./oms-forward.functions";
+type ForwardResult = {
+  destination_id: string;
+  destination_name: string;
+  ok: boolean;
+  http_status: number | null;
+  remote_order_no: string | null;
+  error: string | null;
+};
 
 export async function buildOrderPayload(supabase: any, orderId: string) {
   const { data: order, error: oErr } = await supabase
