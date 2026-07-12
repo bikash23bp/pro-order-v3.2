@@ -311,7 +311,10 @@ export async function syncAllShippedOrders(supabase: Sb): Promise<BulkSyncSummar
     .in("status", ["shipped", "ready_to_ship", "cancel_request"])
     .not("consignment_id", "is", null)
     .order("updated_at", { ascending: false })
-    .limit(100);
+    // Cloudflare Workers cap subrequests per invocation (~50). Each order uses
+    // ~5 subrequests (order fetch, courier fetch, Steadfast API, update, audit).
+    // Keep a safe batch and let pg_cron re-invoke every 5 minutes.
+    .limit(20);
 
   if (error) {
     return {
