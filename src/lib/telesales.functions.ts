@@ -712,83 +712,77 @@ export const importTelesalesCustomers = createServerFn({ method: "POST" })
       .from("user_roles").select("role").eq("user_id", userId).maybeSingle();
     if ((roleRow?.role !== "admin" && roleRow?.role !== "business_owner")) throw new Error("Only admins can import customers");
 
-    // Normalize + dedupe within payload
-    const seen = new Map<string, { name: string | null; phone: string; address: string | null }>();
+    // Keep EVERY input row (per-row assignment). Only skip rows whose phone
+    // can't be normalized. imported_customers.phone is UNIQUE — so we dedupe
+    // ONLY the customer insert, not the assignments.
+    type Row = { name: string | null; phone: string; address: string | null; norm: string };
+    const perRow: Row[] = [];
     let skipped = 0;
     for (const r of data.rows) {
       const n = normalizePhone(r.phone);
       if (!n) { skipped++; continue; }
-      if (!seen.has(n)) {
-        seen.set(n, {
-          name: r.name?.trim() || null,
-          phone: r.phone.trim(),
-          address: r.address?.trim() || null,
-        });
-      }
+      perRow.push({
+        name: r.name?.trim() || null,
+        phone: r.phone.trim(),
+        address: r.address?.trim() || null,
+        norm: n,
+      });
     }
-    const normalizedPhones = [...seen.keys()];
-    if (normalizedPhones.length === 0) {
+    if (perRow.length === 0) {
       return { imported: 0, skipped, alreadyExisted: 0, assignmentsCreated: 0, assignmentsUpdated: 0 };
     }
 
-    // Find existing imported_customers matching these normalized phones
-    const requestedPhones = [...seen.values()].map((v) => v.phone);
+    // Unique customer inserts (one per normalized phone).
+    const uniqueByNorm = new Map<string, Row>();
+    for (const r of perRow) if (!uniqueByNorm.has(r.norm)) uniqueByNorm.set(r.norm, r);
+
+    const requestedPhones = [...uniqueByNorm.values()].map((v) => v.phone);
     const existing = await loadImportedCustomersByNormalizedPhone(supabase, requestedPhones);
-    const existingByNorm = new Map<string, string>();
+    const idByNorm = new Map<string, string>();
     for (const e of existing ?? []) {
       const n = normalizePhone(e.phone);
-      if (n && seen.has(n) && !existingByNorm.has(n)) existingByNorm.set(n, e.id);
+      if (n && uniqueByNorm.has(n) && !idByNorm.has(n)) idByNorm.set(n, e.id);
     }
+    const alreadyExisted = idByNorm.size;
 
-    const existingIdsBeforeInsert = new Set(existingByNorm.values());
-    const alreadyExisted = existingByNorm.size;
-    const toInsert = [...seen.entries()]
-      .filter(([n]) => !existingByNorm.has(n))
-      .map(([, v]) => ({ ...v, created_by: userId }));
+    const toInsert = [...uniqueByNorm.entries()]
+      .filter(([n]) => !idByNorm.has(n))
+      .map(([, v]) => ({ name: v.name, phone: v.phone, address: v.address, created_by: userId }));
 
-    let insertedIds: string[] = [];
+    let insertedCount = 0;
     if (toInsert.length) {
       const { data: ins, error } = await supabase
         .from("imported_customers").insert(toInsert).select("id");
-      if (error) {
-        if (!error.message.toLowerCase().includes("duplicate key value violates unique constraint")) {
-          throw new Error(error.message);
-        }
-      } else {
-        insertedIds = (ins ?? []).map((r) => r.id);
+      if (error && !error.message.toLowerCase().includes("duplicate key value violates unique constraint")) {
+        throw new Error(error.message);
       }
+      insertedCount = (ins ?? []).length;
       const refreshed = await loadImportedCustomersByNormalizedPhone(supabase, requestedPhones);
       for (const row of refreshed) {
         const n = normalizePhone(row.phone);
-        if (n && seen.has(n) && !existingByNorm.has(n)) existingByNorm.set(n, row.id);
+        if (n && uniqueByNorm.has(n) && !idByNorm.has(n)) idByNorm.set(n, row.id);
       }
-      insertedIds = [...existingByNorm.values()].filter((id) => !existingIdsBeforeInsert.has(id));
     }
 
-    const allIds = [...new Set([...existingByNorm.values(), ...insertedIds])];
-    if (allIds.length === 0) {
-      return { imported: 0, skipped, alreadyExisted: existingByNorm.size, assignmentsCreated: 0, assignmentsUpdated: 0 };
-    }
-
-    // Always insert a NEW assignment row for every customer in the payload —
-    // duplicates are allowed by design (same customer can sit in multiple
-    // staff workboards).
-    const assignInsert = allIds.map((customer_id) => ({
-      customer_id,
-      assigned_to: data.assignedTo ?? null,
-      created_by: userId,
-      status: "pending" as const,
-    }));
+    // One assignment per INPUT row — duplicates allowed by design.
+    const assignInsert = perRow
+      .map((r) => idByNorm.get(r.norm))
+      .filter((id): id is string => !!id)
+      .map((customer_id) => ({
+        customer_id,
+        assigned_to: data.assignedTo ?? null,
+        created_by: userId,
+        status: "pending" as const,
+      }));
 
     const assignmentsCreated = await insertTelesalesAssignmentsInChunks(supabase, assignInsert);
-    const assignmentsUpdated = 0;
 
     return {
-      imported: insertedIds.length,
+      imported: insertedCount,
       skipped,
       alreadyExisted,
       assignmentsCreated,
-      assignmentsUpdated,
+      assignmentsUpdated: 0,
     };
   });
 
