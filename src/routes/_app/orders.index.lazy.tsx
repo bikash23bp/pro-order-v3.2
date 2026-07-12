@@ -1135,6 +1135,10 @@ function OrdersPage() {
 
   const applyBulkStatus = async () => {
     if (!bulkStatus || selected.size === 0) return;
+    if (bulkStatus === "cancelled") {
+      setCancelPrompt({ mode: "bulk", ids: Array.from(selected) });
+      return;
+    }
     const DESTRUCTIVE: OrderStatus[] = ["cancelled", "fraud", "returned"];
     if (DESTRUCTIVE.includes(bulkStatus as OrderStatus)) {
       if (!confirm(`Mark ${selected.size} order(s) as ${STATUS_LABEL[bulkStatus as OrderStatus]}? Stock will be restored for active ones.`)) return;
