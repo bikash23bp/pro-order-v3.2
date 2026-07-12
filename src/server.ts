@@ -20,15 +20,13 @@ function hydrateProcessEnv(env: unknown) {
     }
   }
 
-  const personalBackendAliases: Record<string, string> = {
-    SUPABASE_URL: "AUDIT_SUPABASE_URL",
-    SUPABASE_PUBLISHABLE_KEY: "AUDIT_SUPABASE_PUBLISHABLE_KEY",
-    SUPABASE_SERVICE_ROLE_KEY: "AUDIT_SUPABASE_SERVICE_ROLE_KEY",
-  };
-
-  for (const [target, source] of Object.entries(personalBackendAliases)) {
-    const sourceValue = process.env[source] ? normalizeEnvValue(process.env[source]) : "";
-    if (sourceValue) process.env[target] = sourceValue;
+  const auditSupabaseUrl = process.env.AUDIT_SUPABASE_URL ? normalizeEnvValue(process.env.AUDIT_SUPABASE_URL) : "";
+  const auditSupabasePublishableKey = process.env.AUDIT_SUPABASE_PUBLISHABLE_KEY ? normalizeEnvValue(process.env.AUDIT_SUPABASE_PUBLISHABLE_KEY) : "";
+  if (auditSupabaseUrl && auditSupabasePublishableKey) {
+    process.env.SUPABASE_URL = auditSupabaseUrl;
+    process.env.SUPABASE_PUBLISHABLE_KEY = auditSupabasePublishableKey;
+    const auditServiceRoleKey = process.env.AUDIT_SUPABASE_SERVICE_ROLE_KEY ? normalizeEnvValue(process.env.AUDIT_SUPABASE_SERVICE_ROLE_KEY) : "";
+    if (auditServiceRoleKey) process.env.SUPABASE_SERVICE_ROLE_KEY = auditServiceRoleKey;
   }
 
   const legacyPersonalBackendAliases: Record<string, string> = {
