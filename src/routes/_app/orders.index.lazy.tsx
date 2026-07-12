@@ -854,7 +854,7 @@ function OrdersPage() {
             .select("id", { count: "exact", head: true })
             .eq("status", "shipped")
             .eq("courier_status", s.key)
-            .then(({ count }) => { out[s.key] = count ?? 0; }),
+            .then(({ count }: { count: number | null }) => { out[s.key] = count ?? 0; }),
         );
       }
       jobs.push(
@@ -863,7 +863,7 @@ function OrdersPage() {
           .select("id", { count: "exact", head: true })
           .eq("status", "shipped")
           .not("courier_status", "is", null)
-          .then(({ count }) => { out["__all__"] = count ?? 0; }),
+          .then(({ count }: { count: number | null }) => { out["__all__"] = count ?? 0; }),
       );
       await Promise.all(jobs);
       return out;
