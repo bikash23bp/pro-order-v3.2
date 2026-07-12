@@ -2368,6 +2368,16 @@ function OrdersPage() {
         </Suspense>
       )}
 
+      <CancelReasonDialog
+        open={!!cancelPrompt}
+        onOpenChange={(v) => { if (!v) setCancelPrompt(null); }}
+        count={cancelPrompt?.mode === "bulk" ? cancelPrompt.ids.length : 1}
+        onConfirm={async (reasonId, reasonLabel) => {
+          await confirmCancelWithReason(reasonId, reasonLabel);
+          setCancelPrompt(null);
+        }}
+      />
+
       <Dialog open={bulkBlockOpen} onOpenChange={(v) => { if (!bulkBlockBusy) setBulkBlockOpen(v); }}>
         <DialogContent>
           <DialogHeader>
