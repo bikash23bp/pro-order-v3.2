@@ -229,6 +229,15 @@ function applyFilters(qb: any, data: z.infer<typeof OrdersInput>) {
   if (data.status === "sent_to_partner_cancelled") return qb.not("forwarded_to_partner_at", "is", null).eq("status", "cancelled");
   if (data.status === "all") return qb;
 
+  // Cancel-reason sub-tabs under the main "Cancelled" tile.
+  if (typeof data.status === "string" && data.status.startsWith("cancelled_reason:")) {
+    const id = data.status.slice("cancelled_reason:".length);
+    return qb.eq("status", "cancelled").eq("cancel_reason_id", id);
+  }
+  if (data.status === "cancelled_no_reason") {
+    return qb.eq("status", "cancelled").is("cancel_reason_id", null);
+  }
+
   // "pending" এখন স্বাধীন স্ট্যাটাস — শুধু status=pending
   if (data.status === "pending") return qb.eq("status", "pending");
   if (data.status === "ready_order") return qb.eq("status", "ready_order");
