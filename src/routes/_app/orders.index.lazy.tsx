@@ -452,6 +452,7 @@ function OrdersPage() {
   // Slower debounce for the exact-count RPC so typing doesn't refire the
   // aggregation on every keystroke; keepPreviousData keeps the pills stable.
   useEffect(() => {
+    if (!debouncedQ) { setCountsDebouncedQ(""); return; }
     const t = setTimeout(() => setCountsDebouncedQ(debouncedQ), 500);
     return () => clearTimeout(t);
   }, [debouncedQ]);
