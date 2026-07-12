@@ -42,7 +42,11 @@ export type OmsForwardLog = {
 export const listOmsDestinations = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await (context.supabase as any)
+    const { data: canManage } = await (context.supabase as any)
+      .rpc("user_has_permission", { _user_id: context.userId, _perm: "can_manage_oms_endpoints" });
+    if (!canManage) throw new Error("Forbidden");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await (supabaseAdmin as any)
       .from("oms_destinations")
       .select("*")
       .order("created_at", { ascending: false });
@@ -64,7 +68,11 @@ export const upsertOmsDestination = createServerFn({ method: "POST" })
     }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as any;
+    const { data: canManage } = await (context.supabase as any)
+      .rpc("user_has_permission", { _user_id: context.userId, _perm: "can_manage_oms_endpoints" });
+    if (!canManage) throw new Error("Forbidden");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const supabase = supabaseAdmin as any;
     if (data.id) {
       const { error } = await supabase
         .from("oms_destinations")
@@ -101,7 +109,11 @@ export const deleteOmsDestination = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const { error } = await (context.supabase as any)
+    const { data: canManage } = await (context.supabase as any)
+      .rpc("user_has_permission", { _user_id: context.userId, _perm: "can_manage_oms_endpoints" });
+    if (!canManage) throw new Error("Forbidden");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await (supabaseAdmin as any)
       .from("oms_destinations")
       .delete()
       .eq("id", data.id);
@@ -114,7 +126,11 @@ export const deleteOmsDestination = createServerFn({ method: "POST" })
 export const listOmsInbound = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await (context.supabase as any)
+    const { data: canManage } = await (context.supabase as any)
+      .rpc("user_has_permission", { _user_id: context.userId, _perm: "can_manage_oms_endpoints" });
+    if (!canManage) throw new Error("Forbidden");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await (supabaseAdmin as any)
       .from("oms_inbound_settings")
       .select("*")
       .order("created_at", { ascending: false });
@@ -134,7 +150,11 @@ export const upsertOmsInbound = createServerFn({ method: "POST" })
     }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as any;
+    const { data: canManage } = await (context.supabase as any)
+      .rpc("user_has_permission", { _user_id: context.userId, _perm: "can_manage_oms_endpoints" });
+    if (!canManage) throw new Error("Forbidden");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const supabase = supabaseAdmin as any;
     if (data.id) {
       const { error } = await supabase
         .from("oms_inbound_settings")
@@ -167,7 +187,11 @@ export const deleteOmsInbound = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const { error } = await (context.supabase as any)
+    const { data: canManage } = await (context.supabase as any)
+      .rpc("user_has_permission", { _user_id: context.userId, _perm: "can_manage_oms_endpoints" });
+    if (!canManage) throw new Error("Forbidden");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await (supabaseAdmin as any)
       .from("oms_inbound_settings")
       .delete()
       .eq("id", data.id);
@@ -180,7 +204,11 @@ export const deleteOmsInbound = createServerFn({ method: "POST" })
 export const listOmsForwardLogs = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await (context.supabase as any)
+    const { data: canManage } = await (context.supabase as any)
+      .rpc("user_has_permission", { _user_id: context.userId, _perm: "can_manage_oms_endpoints" });
+    if (!canManage) throw new Error("Forbidden");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await (supabaseAdmin as any)
       .from("oms_forward_logs")
       .select("id, order_id, destination_id, destination_name, direction, status, http_status, remote_order_no, error_message, created_at")
       .order("created_at", { ascending: false })
@@ -216,7 +244,11 @@ export const listAllowedProductsForSender = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ sender_id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as any;
+    const { data: canManage } = await (context.supabase as any)
+      .rpc("user_has_permission", { _user_id: context.userId, _perm: "can_manage_oms_endpoints" });
+    if (!canManage) throw new Error("Forbidden");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const supabase = supabaseAdmin as any;
     const { data: rows, error } = await supabase
       .from("oms_inbound_product_access")
       .select("product_id, products:product_id (id, name, sku, price, image_url, status)")
@@ -236,7 +268,11 @@ export const setAllowedProductsForSender = createServerFn({ method: "POST" })
     }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    const supabase = context.supabase as any;
+    const { data: canManage } = await (context.supabase as any)
+      .rpc("user_has_permission", { _user_id: context.userId, _perm: "can_manage_oms_endpoints" });
+    if (!canManage) throw new Error("Forbidden");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const supabase = supabaseAdmin as any;
     const { data: existing, error: eErr } = await supabase
       .from("oms_inbound_product_access")
       .select("product_id")
@@ -271,6 +307,9 @@ export const setAllowedProductsForSender = createServerFn({ method: "POST" })
 export const listAllProductsForPicker = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { data: canManage } = await (context.supabase as any)
+      .rpc("user_has_permission", { _user_id: context.userId, _perm: "can_manage_oms_endpoints" });
+    if (!canManage) throw new Error("Forbidden");
     const { data, error } = await (context.supabase as any)
       .from("products")
       .select("id, name, sku, price, image_url, status")

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { FULL_PERMISSIONS, normalizePermissions, type AppPermissions } from "@/lib/permissions";
@@ -24,6 +24,13 @@ type ProfileBundle = {
 };
 
 const CACHE_KEY = (uid: string) => `auth:profile:${uid}`;
+
+type PersistedAuthSnapshot = {
+  session: Session | null;
+  bundle: ProfileBundle | null;
+};
+
+const EMPTY_PERSISTED_AUTH: PersistedAuthSnapshot = { session: null, bundle: null };
 
 // Read Supabase's persisted session synchronously from localStorage so the
 // app can paint immediately after a browser reload instead of blocking on
@@ -85,6 +92,29 @@ function clearLocal(uid?: string) {
   } catch {
     /* ignore */
   }
+}
+
+function readPersistedAuthSnapshot(): PersistedAuthSnapshot {
+  const session = readPersistedSession();
+  const bundle = session?.user
+    ? memCache.get(session.user.id) ?? readLocal(session.user.id) ?? null
+    : null;
+  if (bundle && session?.user) memCache.set(session.user.id, bundle);
+  return { session, bundle };
+}
+
+function subscribeToHydration(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+  const timeout = window.setTimeout(onStoreChange, 0);
+  return () => window.clearTimeout(timeout);
+}
+
+function usePersistedAuthSnapshot() {
+  return useSyncExternalStore(
+    subscribeToHydration,
+    readPersistedAuthSnapshot,
+    () => EMPTY_PERSISTED_AUTH,
+  );
 }
 
 function shouldUseCachedBundle(_bundle: ProfileBundle): boolean {
@@ -214,21 +244,14 @@ async function fetchProfileBundle(authUser: User): Promise<ProfileBundle | null>
 }
 
 function useAuthImpl() {
-  const initialSession = typeof window !== "undefined" ? readPersistedSession() : null;
-  const initialBundle = initialSession?.user
-    ? memCache.get(initialSession.user.id) ?? readLocal(initialSession.user.id) ?? null
-    : null;
-  if (initialBundle && initialSession?.user) memCache.set(initialSession.user.id, initialBundle);
-  const usableBundle = initialBundle && initialBundle.role !== "user_request" ? initialBundle : null;
-  const [session, setSession] = useState<Session | null>(initialSession);
-  const [user, setUser] = useState<User | null>(initialSession?.user ?? null);
-  // If we already have a cached session, skip the full-screen loading gate.
-  // getSession()/onAuthStateChange will confirm/refresh in the background.
-  const [loading, setLoading] = useState(!initialSession);
+  const persistedAuth = usePersistedAuthSnapshot();
+  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
-  const [role, setRole] = useState<AppRole | null>(usableBundle?.role ?? null);
-  const [permissions, setPermissions] = useState<AppPermissions | null>(usableBundle?.permissions ?? null);
-  const [profile, setProfile] = useState<ProfileBundle["profile"] | null>(usableBundle?.profile ?? null);
+  const [role, setRole] = useState<AppRole | null>(null);
+  const [permissions, setPermissions] = useState<AppPermissions | null>(null);
+  const [profile, setProfile] = useState<ProfileBundle["profile"] | null>(null);
   // Keep lastUidRef null so the mount effect's getSession() path still runs
   // a background hydrate() to refresh role/permissions from the server.
   const lastUidRef = useRef<string | null>(null);
@@ -263,6 +286,22 @@ function useAuthImpl() {
       })
       .finally(() => setProfileLoading(false));
   }
+
+  useEffect(() => {
+    const persistedSession = persistedAuth.session;
+    if (!persistedSession?.user || session) return;
+    setSession(persistedSession);
+    setUser(persistedSession.user);
+    setLoading(false);
+    lastUidRef.current = persistedSession.user.id;
+    const usableBundle = persistedAuth.bundle && persistedAuth.bundle.role !== "user_request"
+      ? persistedAuth.bundle
+      : null;
+    if (usableBundle) applyBundle(usableBundle);
+    setProfileLoading(true);
+    hydrate(persistedSession.user);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persistedAuth.session?.user?.id, session]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {

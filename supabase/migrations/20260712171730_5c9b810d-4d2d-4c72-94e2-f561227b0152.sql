@@ -1,0 +1,1 @@
+GRANT SELECT ON public.oms_destinations TO authenticated;
