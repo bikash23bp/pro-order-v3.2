@@ -441,12 +441,16 @@ function OrdersPage() {
   }, [session, search.dup, fetchDupes, getFilterOptions, fetchSites]);
 
   // Phone-only search: query only after a complete normalized BD number exists.
-  // This avoids slow name/order/partial-phone scans and fires instantly at completion.
+  // A short trailing debounce coalesces rapid keystrokes into a single query,
+  // and clearing the input flushes immediately so results reset without delay.
   useEffect(() => {
     const raw = q.trim();
     if (!raw) { setDebouncedQ(""); return; }
     const normalizedPhone = normalizeBDPhone(raw);
-    setDebouncedQ(normalizedPhone.length === 11 && normalizedPhone.startsWith("01") ? normalizedPhone : "");
+    const next = normalizedPhone.length === 11 && normalizedPhone.startsWith("01") ? normalizedPhone : "";
+    if (!next) { setDebouncedQ(""); return; }
+    const t = setTimeout(() => setDebouncedQ(next), 120);
+    return () => clearTimeout(t);
   }, [q]);
 
   // Slower debounce for the exact-count RPC so typing doesn't refire the
@@ -612,8 +616,12 @@ function OrdersPage() {
   const rows: Order[] = ordersQuery.data?.rows ?? [];
   const totalCount = ordersQuery.data?.totalCount ?? 0;
   const serverPage = ordersQuery.data?.currentPage ?? page;
-  const loading = ordersQuery.isPending && !ordersQuery.data;
-  const refreshing = ordersQuery.isFetching && !loading;
+  // Pending search intent: user typed something that is not yet reflected in
+  // the active query (either still typing, or debounce not flushed). Used to
+  // show the skeleton indicator instantly rather than waiting for the fetch.
+  const searchPending = q.trim().length > 0 && normalizeBDPhone(q.trim()) !== debouncedQ;
+  const loading = (ordersQuery.isPending && !ordersQuery.data) || (searchPending && !ordersQuery.data);
+  const refreshing = (ordersQuery.isFetching && !loading) || searchPending;
   const listTimedOut = Boolean((ordersQuery.data as { timedOut?: boolean } | undefined)?.timedOut);
   const listLoadFailed = ordersQuery.isError && !ordersQuery.data;
 
