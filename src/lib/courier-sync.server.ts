@@ -13,6 +13,7 @@ type OrderRow = {
   consignment_id: string | null;
   courier_id: string | null;
   internal_note: string | null;
+  courier_status: string | null;
 };
 
 type CourierRow = {
@@ -46,27 +47,32 @@ function detectProvider(name: string | null | undefined): "steadfast" | "pathao"
   return "unknown";
 }
 
-// Map Steadfast delivery_status → our order_status (or null = no change)
-function mapSteadfastStatus(deliveryStatus: string): "completed" | "returned" | "cancel_request" | null {
+// Map Steadfast delivery_status → { orderStatus, courierStatus }.
+// - orderStatus set → move the order to a terminal state (completed/returned)
+//   and clear courier_status.
+// - courierStatus set (orderStatus null) → keep order.status as-is, store the
+//   raw courier state so the "Steadfast" pipeline tab can surface it.
+function mapSteadfastStatus(deliveryStatus: string): {
+  orderStatus: "completed" | "returned" | null;
+  courierStatus: string | null;
+} {
   switch (deliveryStatus) {
     case "delivered":
     case "partial_delivered":
-      return "completed";
+      return { orderStatus: "completed", courierStatus: null };
     case "cancelled":
     case "lost":
-      return "returned";
-    // Courier signalled cancellation / return request / approval pending
-    // feedback — surface to operator under "Cancel Request" tab.
+      return { orderStatus: "returned", courierStatus: null };
     case "in_review":
+    case "pending":
     case "hold":
-    case "cancelled_approval_pending":
-    case "unknown_approval_pending":
     case "delivered_approval_pending":
     case "partial_delivered_approval_pending":
-      return "cancel_request";
-    // in_transit, pending, unknown → keep as-is
+    case "cancelled_approval_pending":
+    case "unknown_approval_pending":
+      return { orderStatus: null, courierStatus: deliveryStatus };
     default:
-      return null;
+      return { orderStatus: null, courierStatus: null };
   }
 }
 
@@ -123,7 +129,7 @@ async function getFallbackSteadfastCourier(excludeCourierId?: string | null): Pr
 export async function syncOneOrder(supabase: Sb, orderId: string): Promise<SyncResult> {
   const { data: order, error } = await supabase
     .from("orders")
-    .select("id, status, consignment_id, courier_id, internal_note")
+    .select("id, status, consignment_id, courier_id, internal_note, courier_status")
     .eq("id", orderId)
     .maybeSingle<OrderRow>();
   if (error) return { orderId, ok: false, changed: false, error: error.message };
@@ -184,38 +190,31 @@ export async function syncOneOrder(supabase: Sb, orderId: string): Promise<SyncR
     return { orderId, ok: false, changed: false, provider, oldStatus: order.status, error: resp.error };
   }
 
-  const newStatus = mapSteadfastStatus(resp.delivery_status);
-  if (!newStatus) {
-    return {
-      orderId,
-      ok: true,
-      changed: false,
-      provider,
-      oldStatus: order.status,
-      delivery_status: resp.delivery_status,
-    };
+  const mapped = mapSteadfastStatus(resp.delivery_status);
+
+  // Terminal state → flip order.status and clear courier_status.
+  if (mapped.orderStatus) {
+    const noteLine = `Auto-synced from Steadfast: ${resp.delivery_status} → ${mapped.orderStatus} at ${new Date().toISOString()}`;
+    const nextNote = order.internal_note ? `${order.internal_note}\n${noteLine}` : noteLine;
+    const { error: updErr } = await supabase
+      .from("orders")
+      .update({ status: mapped.orderStatus, courier_status: null, internal_note: nextNote } as never)
+      .eq("id", order.id);
+    if (updErr) return { orderId, ok: false, changed: false, provider, oldStatus: order.status, error: updErr.message };
+    return { orderId, ok: true, changed: true, provider, oldStatus: order.status, newStatus: mapped.orderStatus, delivery_status: resp.delivery_status };
   }
 
-  const noteLine = `Auto-synced from Steadfast: ${resp.delivery_status} → ${newStatus} at ${new Date().toISOString()}`;
-  const nextNote = order.internal_note ? `${order.internal_note}\n${noteLine}` : noteLine;
-
-  const { error: updErr } = await supabase
-    .from("orders")
-    .update({ status: newStatus, internal_note: nextNote })
-    .eq("id", order.id);
-  if (updErr) {
-    return { orderId, ok: false, changed: false, provider, oldStatus: order.status, error: updErr.message };
+  // Intermediate courier state → only update courier_status if it changed.
+  if (mapped.courierStatus && mapped.courierStatus !== order.courier_status) {
+    const { error: updErr } = await supabase
+      .from("orders")
+      .update({ courier_status: mapped.courierStatus } as never)
+      .eq("id", order.id);
+    if (updErr) return { orderId, ok: false, changed: false, provider, oldStatus: order.status, error: updErr.message };
+    return { orderId, ok: true, changed: true, provider, oldStatus: order.status, delivery_status: resp.delivery_status };
   }
 
-  return {
-    orderId,
-    ok: true,
-    changed: true,
-    provider,
-    oldStatus: order.status,
-    newStatus,
-    delivery_status: resp.delivery_status,
-  };
+  return { orderId, ok: true, changed: false, provider, oldStatus: order.status, delivery_status: resp.delivery_status };
 }
 
 export type BulkSyncSummary = {

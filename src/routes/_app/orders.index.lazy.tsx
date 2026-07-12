@@ -196,6 +196,7 @@ const PIPELINE_TABS: TabDef[] = [
   { key: "out_of_stock",  label: "Out of Stock",   color: "purple" },
   { key: "sent_to_partner", label: "Sent to Partner", color: "teal" },
   { key: "shipped",       label: "Shipped",        color: "teal" },
+  { key: "steadfast",     label: "Steadfast",      color: "indigo" },
   { key: "completed",     label: "Completed",      color: "green" },
   { key: "cancelled",     label: "Cancelled",      color: "zinc" },
   { key: "cancel_request", label: "Cancel Request", color: "rose" },
@@ -826,6 +827,65 @@ function OrdersPage() {
   });
   const activeCancelReasons = cancelReasonsQuery.data ?? [];
 
+  // ---- Steadfast pipeline sub-tabs (courier_status) ----
+  const STEADFAST_STATUSES: { key: string; label: string }[] = [
+    { key: "in_review", label: "In Review" },
+    { key: "pending", label: "In Transit" },
+    { key: "hold", label: "On Hold" },
+    { key: "delivered_approval_pending", label: "Delivery Approval" },
+    { key: "partial_delivered_approval_pending", label: "Partial Delivery Approval" },
+    { key: "cancelled_approval_pending", label: "Cancel Approval" },
+    { key: "unknown_approval_pending", label: "Unknown Approval" },
+  ];
+  const isOnSteadfastTab =
+    effectiveStatusFilter === "steadfast" ||
+    effectiveStatusFilter.startsWith("steadfast_status:");
+  const steadfastCountsQuery = useQuery({
+    queryKey: ["orders", "steadfast-counts"],
+    enabled: !!session && isOnSteadfastTab,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const out: Record<string, number> = {};
+      const jobs: PromiseLike<void>[] = [];
+      for (const s of STEADFAST_STATUSES) {
+        jobs.push(
+          (supabase as any)
+            .from("orders")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "shipped")
+            .eq("courier_status", s.key)
+            .then(({ count }: { count: number | null }) => { out[s.key] = count ?? 0; }),
+        );
+      }
+      jobs.push(
+        (supabase as any)
+          .from("orders")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "shipped")
+          .not("courier_status", "is", null)
+          .then(({ count }: { count: number | null }) => { out["__all__"] = count ?? 0; }),
+      );
+      await Promise.all(jobs);
+      return out;
+    },
+  });
+  const steadfastCounts = steadfastCountsQuery.data ?? {};
+
+  // Top-bar count for the Steadfast pipeline tab (independent of sub-tab view).
+  const steadfastTopCountQuery = useQuery({
+    queryKey: ["orders", "steadfast-top-count"],
+    enabled: !!session,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { count } = await (supabase as any)
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "shipped")
+        .not("courier_status", "is", null);
+      return count ?? 0;
+    },
+  });
+
   // Only fetch sub-tab counts when the user is inside the Cancelled section.
   const isOnCancelledTab =
     effectiveStatusFilter === "cancelled" ||
@@ -938,6 +998,12 @@ function OrdersPage() {
       const id = tab.slice("cancelled_reason:".length);
       return r.status === "cancelled" && (r as { cancel_reason_id?: string | null }).cancel_reason_id === id;
     }
+    if (tab === "steadfast") return r.status === "shipped" && !!(r as { courier_status?: string | null }).courier_status;
+    if (tab.startsWith("steadfast_status:")) {
+      const cs = tab.slice("steadfast_status:".length);
+      return r.status === "shipped" && (r as { courier_status?: string | null }).courier_status === cs;
+    }
+    if (tab === "shipped") return r.status === "shipped" && !(r as { courier_status?: string | null }).courier_status;
     return r.status === tab;
   };
 
@@ -968,8 +1034,12 @@ function OrdersPage() {
       else if (tab.key === "sent_to_partner") out[tab.key] = (tabCountsData as any)?.sent_to_partner?.count ?? 0;
       else out[tab.key] = bs[tab.key]?.count ?? 0;
     }
+    // Split the raw "shipped" bucket into: Shipped (no courier response) + Steadfast (with response).
+    const steadfastTop = steadfastTopCountQuery.data ?? 0;
+    out["steadfast"] = steadfastTop;
+    out["shipped"] = Math.max(0, (out["shipped"] ?? 0) - steadfastTop);
     return out;
-  }, [tabCountsData]);
+  }, [tabCountsData, steadfastTopCountQuery.data]);
 
   const tabAmounts = useMemo(() => {
     const out: Record<string, number> = {};
@@ -1868,6 +1938,37 @@ function OrdersPage() {
                     active
                       ? "bg-[#00B795] text-white border-[#00B795]"
                       : "border-rose-500/60 text-rose-800 dark:text-rose-200 hover:bg-rose-500/20"
+                  }`}
+                >
+                  <span>{sf.label}</span>
+                  <span className={`text-[10px] tabular-nums ${active ? "text-white/90" : "opacity-80"}`}>{sf.count}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {isOnSteadfastTab && (
+          <div className="flex flex-wrap items-center gap-1.5 px-3 sm:px-4 py-2 border-y bg-indigo-500/10">
+            <span className="text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 mr-1">Steadfast সাব-ফিল্টার:</span>
+            {[
+              { key: "steadfast", label: "All", count: steadfastCounts["__all__"] ?? (steadfastTopCountQuery.data ?? 0) },
+              ...STEADFAST_STATUSES.map((s) => ({
+                key: `steadfast_status:${s.key}`,
+                label: s.label,
+                count: steadfastCounts[s.key] ?? 0,
+              })),
+            ].map((sf) => {
+              const active = effectiveStatusFilter === sf.key;
+              return (
+                <button
+                  key={sf.key}
+                  type="button"
+                  onClick={() => selectOrderTab(sf.key)}
+                  onMouseEnter={() => prefetchOrderTab(sf.key)}
+                  className={`px-3 py-1 rounded-md border-2 text-[11px] font-semibold transition-colors inline-flex items-center gap-1.5 ${
+                    active
+                      ? "bg-[#00B795] text-white border-[#00B795]"
+                      : "border-indigo-500/60 text-indigo-800 dark:text-indigo-200 hover:bg-indigo-500/20"
                   }`}
                 >
                   <span>{sf.label}</span>

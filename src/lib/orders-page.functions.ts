@@ -21,7 +21,7 @@ const OrdersInput = z.object({
 
 type CountBucket = { count: number; amount: number };
 
-const ORDER_LIST_SELECT = "id, order_number, invoice_number, customer_name, customer_phone, customer_email, customer_address, status, total_amount, delivery_charge, discount_amount, advance_amount, advance_source_id, advance_txn_id, subtotal, created_at, updated_at, consignment_id, tracking_url, invoice_note, internal_note, courier_id, order_source_id, source, preorder, preorder_date, customer_type, created_by, updated_by, oms_sender_name, oms_sender_order_no, source_site_id, is_paid_marketing, forwarded_to_partner_at, order_sources(name)";
+const ORDER_LIST_SELECT = "id, order_number, invoice_number, customer_name, customer_phone, customer_email, customer_address, status, total_amount, delivery_charge, discount_amount, advance_amount, advance_source_id, advance_txn_id, subtotal, created_at, updated_at, consignment_id, tracking_url, invoice_note, internal_note, courier_id, courier_status, order_source_id, source, preorder, preorder_date, customer_type, created_by, updated_by, oms_sender_name, oms_sender_order_no, source_site_id, is_paid_marketing, forwarded_to_partner_at, order_sources(name)";
 const ORDER_LIST_SELECT_LEGACY = "id, order_number, invoice_number, customer_name, customer_phone, customer_email, customer_address, status, total_amount, delivery_charge, discount_amount, advance_amount, advance_source_id, advance_txn_id, subtotal, created_at, updated_at, consignment_id, tracking_url, invoice_note, internal_note, courier_id, order_source_id, source, preorder, preorder_date, customer_type, created_by, updated_by, oms_sender_name, oms_sender_order_no, source_site_id, is_paid_marketing, order_sources(name)";
 const OMS_SENDERS_CACHE_TTL_MS = 25_000;
 const omsSendersCache = new Map<string, { expiresAt: number; promise: Promise<string[] | null> }>();
@@ -229,6 +229,16 @@ function applyFilters(qb: any, data: z.infer<typeof OrdersInput>) {
   if (data.status === "sent_to_partner_cancelled") return qb.not("forwarded_to_partner_at", "is", null).eq("status", "cancelled");
   if (data.status === "all") return qb;
 
+  // Steadfast pipeline tab: shipped orders that have received a raw courier state.
+  if (data.status === "steadfast") return qb.eq("status", "shipped").not("courier_status", "is", null);
+  if (typeof data.status === "string" && data.status.startsWith("steadfast_status:")) {
+    const cs = data.status.slice("steadfast_status:".length);
+    return qb.eq("status", "shipped").eq("courier_status", cs);
+  }
+  // "Shipped" tab excludes orders that already have a courier response —
+  // those move to the Steadfast tab.
+  if (data.status === "shipped") return qb.eq("status", "shipped").is("courier_status", null);
+
   // Cancel-reason sub-tabs under the main "Cancelled" tile.
   if (typeof data.status === "string" && data.status.startsWith("cancelled_reason:")) {
     const id = data.status.slice("cancelled_reason:".length);
@@ -258,6 +268,8 @@ function isSingleStatusFilter(status: string): boolean {
     case "preorder":
     case "sent_to_partner":
     case "incomplete":
+      return false;
+    case "steadfast":
       return false;
     default:
       return true;
