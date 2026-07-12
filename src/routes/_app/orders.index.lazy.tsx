@@ -2369,6 +2369,7 @@ function OrdersPage() {
       )}
 
       <Dialog open={bulkBlockOpen} onOpenChange={(v) => { if (!bulkBlockBusy) setBulkBlockOpen(v); }}>
+
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
