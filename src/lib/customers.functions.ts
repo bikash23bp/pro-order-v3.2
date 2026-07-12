@@ -144,8 +144,8 @@ async function enrichPhones(supabase: any, phones: string[]) {
     chunks.map((ch) =>
       supabase
         .from("orders")
-        .select("customer_phone, source, order_source_id, discount_amount, order_items(products(name))")
-        .in("customer_phone", ch),
+        .select("phone_normalized, source, order_source_id, discount_amount, order_items(products(name))")
+        .in("phone_normalized", ch),
     ),
   );
   const tagsChunks = await Promise.all(
@@ -197,7 +197,7 @@ async function enrichPhones(supabase: any, phones: string[]) {
 
   const meta = new Map<string, { sources: Set<string>; products: Set<string>; has_discount: boolean }>();
   for (const o of (ordersRes.data ?? []) as any[]) {
-    const phone = (o.customer_phone ?? "").trim();
+    const phone = (o.phone_normalized ?? "").trim();
     if (!phone) continue;
     let m = meta.get(phone);
     if (!m) { m = { sources: new Set(), products: new Set(), has_discount: false }; meta.set(phone, m); }
