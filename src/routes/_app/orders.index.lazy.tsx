@@ -28,6 +28,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { DuplicateBadge } from "@/components/orders/DuplicateBadge";
+import { CancelReasonDialog } from "@/components/orders/CancelReasonDialog";
 import { listAllTagsByPhone, normalizePhoneKey, CUSTOMER_TAGS, TAG_LABEL, type CustomerTag } from "@/lib/tags.functions";
 import { getDuplicatePhones } from "@/lib/duplicates.functions";
 import { normalizePhoneClient } from "@/lib/duplicates.shared";
