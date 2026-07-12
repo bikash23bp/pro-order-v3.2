@@ -827,6 +827,65 @@ function OrdersPage() {
   });
   const activeCancelReasons = cancelReasonsQuery.data ?? [];
 
+  // ---- Steadfast pipeline sub-tabs (courier_status) ----
+  const STEADFAST_STATUSES: { key: string; label: string }[] = [
+    { key: "in_review", label: "In Review" },
+    { key: "pending", label: "In Transit" },
+    { key: "hold", label: "On Hold" },
+    { key: "delivered_approval_pending", label: "Delivery Approval" },
+    { key: "partial_delivered_approval_pending", label: "Partial Delivery Approval" },
+    { key: "cancelled_approval_pending", label: "Cancel Approval" },
+    { key: "unknown_approval_pending", label: "Unknown Approval" },
+  ];
+  const isOnSteadfastTab =
+    effectiveStatusFilter === "steadfast" ||
+    effectiveStatusFilter.startsWith("steadfast_status:");
+  const steadfastCountsQuery = useQuery({
+    queryKey: ["orders", "steadfast-counts"],
+    enabled: !!session && isOnSteadfastTab,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const out: Record<string, number> = {};
+      const jobs: PromiseLike<void>[] = [];
+      for (const s of STEADFAST_STATUSES) {
+        jobs.push(
+          supabase
+            .from("orders")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "shipped")
+            .eq("courier_status", s.key)
+            .then(({ count }) => { out[s.key] = count ?? 0; }),
+        );
+      }
+      jobs.push(
+        supabase
+          .from("orders")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "shipped")
+          .not("courier_status", "is", null)
+          .then(({ count }) => { out["__all__"] = count ?? 0; }),
+      );
+      await Promise.all(jobs);
+      return out;
+    },
+  });
+  const steadfastCounts = steadfastCountsQuery.data ?? {};
+
+  // Top-bar count for the Steadfast pipeline tab (independent of sub-tab view).
+  const steadfastTopCountQuery = useQuery({
+    queryKey: ["orders", "steadfast-top-count"],
+    enabled: !!session,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "shipped")
+        .not("courier_status", "is", null);
+      return count ?? 0;
+    },
+  });
+
   // Only fetch sub-tab counts when the user is inside the Cancelled section.
   const isOnCancelledTab =
     effectiveStatusFilter === "cancelled" ||
