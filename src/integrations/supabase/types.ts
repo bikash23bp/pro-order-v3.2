@@ -161,6 +161,33 @@ export type Database = {
         }
         Relationships: []
       }
+      cancel_reasons: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          label: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          label: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          label?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       categories: {
         Row: {
           created_at: string
@@ -1346,6 +1373,7 @@ export type Database = {
           advance_amount: number
           advance_source_id: string | null
           advance_txn_id: string | null
+          cancel_reason_id: string | null
           consignment_id: string | null
           courier_id: string | null
           created_at: string
@@ -1387,6 +1415,7 @@ export type Database = {
           advance_amount?: number
           advance_source_id?: string | null
           advance_txn_id?: string | null
+          cancel_reason_id?: string | null
           consignment_id?: string | null
           courier_id?: string | null
           created_at?: string
@@ -1428,6 +1457,7 @@ export type Database = {
           advance_amount?: number
           advance_source_id?: string | null
           advance_txn_id?: string | null
+          cancel_reason_id?: string | null
           consignment_id?: string | null
           courier_id?: string | null
           created_at?: string
@@ -1471,6 +1501,13 @@ export type Database = {
             columns: ["advance_source_id"]
             isOneToOne: false
             referencedRelation: "advance_payment_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_cancel_reason_id_fkey"
+            columns: ["cancel_reason_id"]
+            isOneToOne: false
+            referencedRelation: "cancel_reasons"
             referencedColumns: ["id"]
           },
           {
@@ -3094,6 +3131,7 @@ export type Database = {
           advance_amount: number
           advance_source_id: string | null
           advance_txn_id: string | null
+          cancel_reason_id: string | null
           consignment_id: string | null
           courier_id: string | null
           created_at: string
@@ -3490,6 +3528,7 @@ export type Database = {
           advance_amount: number
           advance_source_id: string | null
           advance_txn_id: string | null
+          cancel_reason_id: string | null
           consignment_id: string | null
           courier_id: string | null
           created_at: string
