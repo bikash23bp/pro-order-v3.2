@@ -94,13 +94,31 @@ function clearLocal(uid?: string) {
   }
 }
 
+let cachedSnapshot: PersistedAuthSnapshot = EMPTY_PERSISTED_AUTH;
+
 function readPersistedAuthSnapshot(): PersistedAuthSnapshot {
   const session = readPersistedSession();
   const bundle = session?.user
     ? memCache.get(session.user.id) ?? readLocal(session.user.id) ?? null
     : null;
   if (bundle && session?.user) memCache.set(session.user.id, bundle);
-  return { session, bundle };
+  // Return a stable reference when contents are equal — useSyncExternalStore
+  // bails out on Object.is, so a fresh object every call is an infinite loop.
+  if (
+    cachedSnapshot.session === session &&
+    cachedSnapshot.bundle === bundle
+  ) {
+    return cachedSnapshot;
+  }
+  if (
+    cachedSnapshot.session?.access_token === session?.access_token &&
+    cachedSnapshot.session?.user?.id === session?.user?.id &&
+    cachedSnapshot.bundle === bundle
+  ) {
+    return cachedSnapshot;
+  }
+  cachedSnapshot = { session, bundle };
+  return cachedSnapshot;
 }
 
 function subscribeToHydration(onStoreChange: () => void) {
