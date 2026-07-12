@@ -511,9 +511,10 @@ function OrdersPage() {
 
   const effectiveStatusFilter = useMemo(() => {
     if (!debouncedQ) return statusFilter;
-    if (search.dup || search.status || hasManualStatusSelection) return statusFilter;
+    // Phone search must be global and indexed-only. Keeping the current tab/status
+    // can hide valid orders and may force a slower filtered order path.
     return "all";
-  }, [debouncedQ, hasManualStatusSelection, search.dup, search.status, statusFilter]);
+  }, [debouncedQ, statusFilter]);
 
   // Apply shared filters (source/courier/date/search/tag/advance) to any orders query builder.
   const applySharedFilters = (qb: ReturnType<typeof supabase.from> extends infer T ? any : any) => {
@@ -1352,7 +1353,10 @@ function OrdersPage() {
                 placeholder="Search phone number only…"
                 aria-label="Search by phone number"
                 value={q}
-                onChange={(e) => setQ(toAsciiDigits(e.target.value))}
+                onChange={(e) => {
+                  setQ(toAsciiDigits(e.target.value));
+                  if (page !== 1) goToPage(1);
+                }}
                 className="h-8 min-w-0 w-full px-2 text-[11px] sm:h-9 sm:max-w-sm sm:px-3 sm:text-sm"
               />
             </div>
