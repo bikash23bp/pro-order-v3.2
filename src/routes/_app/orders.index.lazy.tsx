@@ -1022,6 +1022,10 @@ function OrdersPage() {
 
         if (!confirm(`This order is already ${STATUS_LABEL[prev]}. Move it back to ${STATUS_LABEL[status as OrderStatus]}? Stock will be re-deducted if applicable.`)) return;
 
+      } else if (status === "cancelled" && !TERMINAL.includes(prev)) {
+        // Ask for a reason before cancelling — the dialog handles the DB update.
+        setCancelPrompt({ mode: "single", id, prev });
+        return;
       } else if (DESTRUCTIVE.includes(status as OrderStatus) && !TERMINAL.includes(prev)) {
 
         if (!confirm(`Mark this order as ${STATUS_LABEL[status as OrderStatus]}? Stock will be restored.`)) return;
