@@ -998,6 +998,12 @@ function OrdersPage() {
       const id = tab.slice("cancelled_reason:".length);
       return r.status === "cancelled" && (r as { cancel_reason_id?: string | null }).cancel_reason_id === id;
     }
+    if (tab === "steadfast") return r.status === "shipped" && !!(r as { courier_status?: string | null }).courier_status;
+    if (tab.startsWith("steadfast_status:")) {
+      const cs = tab.slice("steadfast_status:".length);
+      return r.status === "shipped" && (r as { courier_status?: string | null }).courier_status === cs;
+    }
+    if (tab === "shipped") return r.status === "shipped" && !(r as { courier_status?: string | null }).courier_status;
     return r.status === tab;
   };
 
