@@ -849,7 +849,7 @@ function OrdersPage() {
       const jobs: PromiseLike<void>[] = [];
       for (const s of STEADFAST_STATUSES) {
         jobs.push(
-          supabase
+          (supabase as any)
             .from("orders")
             .select("id", { count: "exact", head: true })
             .eq("status", "shipped")
@@ -858,7 +858,7 @@ function OrdersPage() {
         );
       }
       jobs.push(
-        supabase
+        (supabase as any)
           .from("orders")
           .select("id", { count: "exact", head: true })
           .eq("status", "shipped")
@@ -877,7 +877,7 @@ function OrdersPage() {
     enabled: !!session,
     staleTime: 30_000,
     queryFn: async () => {
-      const { count } = await supabase
+      const { count } = await (supabase as any)
         .from("orders")
         .select("id", { count: "exact", head: true })
         .eq("status", "shipped")
