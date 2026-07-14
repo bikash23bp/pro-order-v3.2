@@ -832,7 +832,9 @@ function AssignDialog({
   const [iLoading, setILoading] = useState(false);
   const [iRows, setIRows] = useState<Awaited<ReturnType<typeof unassignedFn>>>([]);
   const [iQ, setIQ] = useState("");
-  const [iSel, setISel] = useState<Set<string>>(new Set());
+  // Map<customer_id, count> — count>1 লিখলে একই dialog-এ একই customer কে
+  // একাধিকবার assign হবে (duplicate rows insert)।
+  const [iSel, setISel] = useState<Map<string, number>>(new Map());
 
   // system tab
   const [sLoading, setSLoading] = useState(false);
@@ -850,7 +852,7 @@ function AssignDialog({
 
   useEffect(() => {
     if (!open) {
-      setISel(new Set()); setSSel(new Map()); setAssignee(""); setMode("imported");
+      setISel(new Map()); setSSel(new Map()); setAssignee(""); setMode("imported");
       return;
     }
     (async () => {
@@ -901,7 +903,11 @@ function AssignDialog({
     try {
       if (mode === "imported") {
         if (iSel.size === 0) { toast.info("Select customers"); setSaving(false); return; }
-        const r = await assignFn({ data: { customerIds: [...iSel], assignedTo: assignee } });
+        const ids: string[] = [];
+        for (const [id, n] of iSel) {
+          for (let i = 0; i < Math.max(1, n); i++) ids.push(id);
+        }
+        const r = await assignFn({ data: { customerIds: ids, assignedTo: assignee } });
         toast.success(`Assigned ${r.inserted + r.updated} customer(s)`);
       } else {
         if (sSel.size === 0) { toast.info("Select customers"); setSaving(false); return; }
@@ -913,7 +919,8 @@ function AssignDialog({
     finally { setSaving(false); }
   };
 
-  const selCount = mode === "imported" ? iSel.size : sSel.size;
+  const iTotal = [...iSel.values()].reduce((a, b) => a + Math.max(1, b), 0);
+  const selCount = mode === "imported" ? iTotal : sSel.size;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
