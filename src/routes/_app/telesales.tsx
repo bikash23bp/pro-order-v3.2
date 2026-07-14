@@ -832,7 +832,9 @@ function AssignDialog({
   const [iLoading, setILoading] = useState(false);
   const [iRows, setIRows] = useState<Awaited<ReturnType<typeof unassignedFn>>>([]);
   const [iQ, setIQ] = useState("");
-  const [iSel, setISel] = useState<Set<string>>(new Set());
+  // Map<customer_id, count> — count>1 লিখলে একই dialog-এ একই customer কে
+  // একাধিকবার assign হবে (duplicate rows insert)।
+  const [iSel, setISel] = useState<Map<string, number>>(new Map());
 
   // system tab
   const [sLoading, setSLoading] = useState(false);
@@ -850,7 +852,7 @@ function AssignDialog({
 
   useEffect(() => {
     if (!open) {
-      setISel(new Set()); setSSel(new Map()); setAssignee(""); setMode("imported");
+      setISel(new Map()); setSSel(new Map()); setAssignee(""); setMode("imported");
       return;
     }
     (async () => {
@@ -901,7 +903,11 @@ function AssignDialog({
     try {
       if (mode === "imported") {
         if (iSel.size === 0) { toast.info("Select customers"); setSaving(false); return; }
-        const r = await assignFn({ data: { customerIds: [...iSel], assignedTo: assignee } });
+        const ids: string[] = [];
+        for (const [id, n] of iSel) {
+          for (let i = 0; i < Math.max(1, n); i++) ids.push(id);
+        }
+        const r = await assignFn({ data: { customerIds: ids, assignedTo: assignee } });
         toast.success(`Assigned ${r.inserted + r.updated} customer(s)`);
       } else {
         if (sSel.size === 0) { toast.info("Select customers"); setSaving(false); return; }
@@ -913,7 +919,8 @@ function AssignDialog({
     finally { setSaving(false); }
   };
 
-  const selCount = mode === "imported" ? iSel.size : sSel.size;
+  const iTotal = [...iSel.values()].reduce((a, b) => a + Math.max(1, b), 0);
+  const selCount = mode === "imported" ? iTotal : sSel.size;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -964,14 +971,32 @@ function AssignDialog({
                     {iRows.map((r) => (
                       <TableRow key={r.id}>
                         <TableCell>
-                          <Checkbox
-                            checked={iSel.has(r.id)}
-                            onCheckedChange={(v) => {
-                              const n = new Set(iSel);
-                              if (v) n.add(r.id); else n.delete(r.id);
-                              setISel(n);
-                            }}
-                          />
+                          <div className="flex items-center gap-1">
+                            <Checkbox
+                              checked={iSel.has(r.id)}
+                              onCheckedChange={(v) => {
+                                const n = new Map(iSel);
+                                if (v) n.set(r.id, n.get(r.id) ?? 1); else n.delete(r.id);
+                                setISel(n);
+                              }}
+                            />
+                            {iSel.has(r.id) && (
+                              <div className="flex items-center gap-0.5 ml-1">
+                                <Button size="icon" variant="ghost" className="h-6 w-6"
+                                  onClick={() => {
+                                    const n = new Map(iSel);
+                                    const c = Math.max(1, (n.get(r.id) ?? 1) - 1);
+                                    n.set(r.id, c); setISel(n);
+                                  }}>−</Button>
+                                <span className="text-xs w-5 text-center font-mono">{iSel.get(r.id) ?? 1}</span>
+                                <Button size="icon" variant="ghost" className="h-6 w-6"
+                                  onClick={() => {
+                                    const n = new Map(iSel);
+                                    n.set(r.id, (n.get(r.id) ?? 1) + 1); setISel(n);
+                                  }}>+</Button>
+                              </div>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>{r.name ?? "—"}</TableCell>
                         <TableCell className="font-mono text-xs">{r.phone}</TableCell>
