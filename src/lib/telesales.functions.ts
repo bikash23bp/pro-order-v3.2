@@ -12,9 +12,14 @@ const ActionSchema = z.enum([
 ]);
 
 function normalizePhone(p: string): string | null {
-  const digits = (p || "").replace(/\D/g, "");
-  if (digits.length < 6) return null;
-  return digits.slice(-11);
+  const raw = (p || "").trim();
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, "");
+  // Real phone: 8+ digits → canonical last-11 form (handles +88, spaces, dashes).
+  if (digits.length >= 8) return digits.slice(-11);
+  // Loose fallback: keep the row, use trimmed raw as its own key so it
+  // never silently collides with a real phone or another distinct value.
+  return `raw:${raw.toLowerCase()}`;
 }
 
 async function loadImportedCustomersByNormalizedPhone(
@@ -700,7 +705,7 @@ export const importTelesalesCustomers = createServerFn({ method: "POST" })
     z.object({
       rows: z.array(z.object({
         name: z.string().max(255).optional().nullable(),
-        phone: z.string().min(1).max(50),
+        phone: z.string().max(50),
         address: z.string().max(1000).optional().nullable(),
       })).min(1).max(5000),
       assignedTo: z.string().uuid().nullable().optional(),

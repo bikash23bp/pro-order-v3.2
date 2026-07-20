@@ -1359,12 +1359,15 @@ function ImportDialog({
   const [liveImported, setLiveImported] = useState(0);
   const [liveExisted, setLiveExisted] = useState(0);
   const [liveAssigned, setLiveAssigned] = useState(0);
+  const [liveSkipped, setLiveSkipped] = useState(0);
+  const [skippedRows, setSkippedRows] = useState<{ row: number; name: string | null; address: string | null }[]>([]);
 
   useEffect(() => {
     if (!open) {
       setStep(1); setParsed([]); setAssignee("none");
       setProgress(0); setProgressDone(0); setProgressTotal(0);
-      setLiveImported(0); setLiveExisted(0); setLiveAssigned(0);
+      setLiveImported(0); setLiveExisted(0); setLiveAssigned(0); setLiveSkipped(0);
+      setSkippedRows([]);
     }
   }, [open]);
 
@@ -1390,7 +1393,7 @@ function ImportDialog({
       };
       const out: Row[] = rows.map((r) => {
         const name = (h.name ? (r[h.name] ?? "").trim() : "") || null;
-        const phone = (h.phone ? (r[h.phone] ?? "").trim() : "") || "N/A";
+        const phone = h.phone ? (r[h.phone] ?? "").trim() : "";
         const address = (h.address ? (r[h.address] ?? "").trim() : "") || null;
         return { name, phone, address };
       });
@@ -1416,10 +1419,16 @@ function ImportDialog({
     setBusy(true);
     setStep(3);
     setProgress(0); setProgressDone(0); setProgressTotal(parsed.length);
-    setLiveImported(0); setLiveExisted(0); setLiveAssigned(0);
+    setLiveImported(0); setLiveExisted(0); setLiveAssigned(0); setLiveSkipped(0);
+    // Pre-compute truly-empty-phone rows (row number = 1-based file order).
+    const emptyList = parsed
+      .map((r, i) => ({ row: i + 1, name: r.name, phone: r.phone, address: r.address }))
+      .filter((r) => !r.phone || !r.phone.trim())
+      .map(({ row, name, address }) => ({ row, name, address }));
+    setSkippedRows(emptyList);
     try {
       const BATCH = 500;
-      let imported = 0, existed = 0, assigned = 0;
+      let imported = 0, existed = 0, assigned = 0, skipped = 0;
       for (let i = 0; i < parsed.length; i += BATCH) {
         const slice = parsed.slice(i, i + BATCH);
         const r = await importFn({
@@ -1431,14 +1440,18 @@ function ImportDialog({
         imported += r.imported;
         existed += r.alreadyExisted;
         assigned += r.assignmentsCreated + r.assignmentsUpdated;
+        skipped += r.skipped;
         const done = i + slice.length;
         setProgressDone(done);
         setLiveImported(imported);
         setLiveExisted(existed);
         setLiveAssigned(assigned);
+        setLiveSkipped(skipped);
         setProgress(Math.round((done / parsed.length) * 100));
       }
-      toast.success(`Imported ${imported}, existing ${existed}, assignments ${assigned}`);
+      toast.success(
+        `Imported ${imported}, existing ${existed}, assignments ${assigned}, skipped (empty phone) ${skipped}`,
+      );
       onImported();
     } catch (e) { toast.error(e instanceof Error ? e.message : "Import failed"); }
     finally { setBusy(false); }
@@ -1520,7 +1533,40 @@ function ImportDialog({
               <div className="text-green-600">Imported: {liveImported}</div>
               <div className="text-muted-foreground">Existing: {liveExisted}</div>
               <div className="text-blue-600">Assignments: {liveAssigned}</div>
+              <div className="text-orange-600">Skipped (empty phone): {liveSkipped}</div>
             </div>
+            {skippedRows.length > 0 && (
+              <div className="rounded border p-2 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span>{skippedRows.length} rows had a truly-empty phone cell and were skipped.</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const header = "row,name,address";
+                      const body = skippedRows
+                        .map((r) => `${r.row},"${(r.name ?? "").replace(/"/g, '""')}","${(r.address ?? "").replace(/"/g, '""')}"`)
+                        .join("\n");
+                      const blob = new Blob([header + "\n" + body], { type: "text/csv" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url; a.download = "skipped-empty-phone.csv"; a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
+                    Download list
+                  </Button>
+                </div>
+                <div className="max-h-32 overflow-y-auto">
+                  {skippedRows.slice(0, 20).map((r) => (
+                    <div key={r.row} className="text-muted-foreground">
+                      Row {r.row}: {r.name ?? "—"} {r.address ? `(${r.address})` : ""}
+                    </div>
+                  ))}
+                  {skippedRows.length > 20 && <div className="text-muted-foreground">…and {skippedRows.length - 20} more</div>}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
