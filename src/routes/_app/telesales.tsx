@@ -1533,7 +1533,40 @@ function ImportDialog({
               <div className="text-green-600">Imported: {liveImported}</div>
               <div className="text-muted-foreground">Existing: {liveExisted}</div>
               <div className="text-blue-600">Assignments: {liveAssigned}</div>
+              <div className="text-orange-600">Skipped (empty phone): {liveSkipped}</div>
             </div>
+            {skippedRows.length > 0 && (
+              <div className="rounded border p-2 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span>{skippedRows.length} rows had a truly-empty phone cell and were skipped.</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const header = "row,name,address";
+                      const body = skippedRows
+                        .map((r) => `${r.row},"${(r.name ?? "").replace(/"/g, '""')}","${(r.address ?? "").replace(/"/g, '""')}"`)
+                        .join("\n");
+                      const blob = new Blob([header + "\n" + body], { type: "text/csv" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url; a.download = "skipped-empty-phone.csv"; a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
+                    Download list
+                  </Button>
+                </div>
+                <div className="max-h-32 overflow-y-auto">
+                  {skippedRows.slice(0, 20).map((r) => (
+                    <div key={r.row} className="text-muted-foreground">
+                      Row {r.row}: {r.name ?? "—"} {r.address ? `(${r.address})` : ""}
+                    </div>
+                  ))}
+                  {skippedRows.length > 20 && <div className="text-muted-foreground">…and {skippedRows.length - 20} more</div>}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
