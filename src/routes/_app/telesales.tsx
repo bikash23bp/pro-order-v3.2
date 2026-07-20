@@ -1390,7 +1390,7 @@ function ImportDialog({
       };
       const out: Row[] = rows.map((r) => {
         const name = (h.name ? (r[h.name] ?? "").trim() : "") || null;
-        const phone = (h.phone ? (r[h.phone] ?? "").trim() : "") || "N/A";
+        const phone = h.phone ? (r[h.phone] ?? "").trim() : "";
         const address = (h.address ? (r[h.address] ?? "").trim() : "") || null;
         return { name, phone, address };
       });
