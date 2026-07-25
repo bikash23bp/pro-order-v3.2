@@ -358,7 +358,7 @@ export const assignTelesalesCustomers = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
     z.object({
-      customerIds: z.array(z.string().uuid()).min(1).max(1000),
+      customerIds: z.array(z.string().uuid()).min(1).max(10000),
       assignedTo: z.string().uuid().nullable(),
     }).parse(input),
   )
