@@ -358,7 +358,7 @@ export const assignTelesalesCustomers = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
     z.object({
-      customerIds: z.array(z.string().uuid()).min(1).max(1000),
+      customerIds: z.array(z.string().uuid()).min(1).max(10000),
       assignedTo: z.string().uuid().nullable(),
     }).parse(input),
   )
@@ -707,7 +707,7 @@ export const importTelesalesCustomers = createServerFn({ method: "POST" })
         name: z.string().max(255).optional().nullable(),
         phone: z.string().max(50),
         address: z.string().max(1000).optional().nullable(),
-      })).min(1).max(5000),
+      })).min(1).max(10000),
       assignedTo: z.string().uuid().nullable().optional(),
     }).parse(input),
   )
@@ -877,7 +877,7 @@ export const assignSystemCustomersToTelesales = createServerFn({ method: "POST" 
         name: z.string().max(255).nullable(),
         phone: z.string().min(1).max(50),
         address: z.string().max(1000).nullable(),
-      })).min(1).max(1000),
+      })).min(1).max(10000),
       assignedTo: z.string().uuid().nullable(),
     }).parse(input),
   )
