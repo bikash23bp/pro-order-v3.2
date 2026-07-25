@@ -707,7 +707,7 @@ export const importTelesalesCustomers = createServerFn({ method: "POST" })
         name: z.string().max(255).optional().nullable(),
         phone: z.string().max(50),
         address: z.string().max(1000).optional().nullable(),
-      })).min(1).max(5000),
+      })).min(1).max(10000),
       assignedTo: z.string().uuid().nullable().optional(),
     }).parse(input),
   )
