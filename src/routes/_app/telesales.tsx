@@ -911,8 +911,13 @@ function AssignDialog({
         for (const [id, n] of iSel) {
           for (let i = 0; i < Math.max(1, n); i++) ids.push(id);
         }
-        const r = await assignFn({ data: { customerIds: ids, assignedTo: assignee } });
-        toast.success(`Assigned ${r.inserted + r.updated} customer(s)`);
+        const CHUNK = 2000;
+        let done = 0;
+        for (let i = 0; i < ids.length; i += CHUNK) {
+          const r = await assignFn({ data: { customerIds: ids.slice(i, i + CHUNK), assignedTo: assignee } });
+          done += r.inserted + r.updated;
+        }
+        toast.success(`Assigned ${done} customer(s)`);
       } else {
         if (sSel.size === 0) { toast.info("Select customers"); setSaving(false); return; }
         const expanded: { name: string | null; phone: string; address: string | null }[] = [];
