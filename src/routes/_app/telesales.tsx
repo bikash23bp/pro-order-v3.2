@@ -846,7 +846,11 @@ function AssignDialog({
   const [sDateTo, setSDateTo] = useState<string>("");
   const [sOnlyCancelled, setSOnlyCancelled] = useState(false);
   const [sHasDiscount, setSHasDiscount] = useState(false);
-  const [sSel, setSSel] = useState<Map<string, { name: string | null; phone: string; address: string | null }>>(new Map());
+  // Map<phone_normalized, { row, count }> — count>1 → same customer assigned
+  // multiple times in one submit (duplicate assignment rows).
+  const [sSel, setSSel] = useState<
+    Map<string, { row: { name: string | null; phone: string; address: string | null }; count: number }>
+  >(new Map());
   const [sourceOptions, setSourceOptions] = useState<{ id: string; name: string }[]>([]);
   const [productOptions, setProductOptions] = useState<{ id: string; name: string }[]>([]);
 
