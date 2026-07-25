@@ -915,7 +915,18 @@ function AssignDialog({
         toast.success(`Assigned ${r.inserted + r.updated} customer(s)`);
       } else {
         if (sSel.size === 0) { toast.info("Select customers"); setSaving(false); return; }
-        const r = await assignSystemFn({ data: { customers: [...sSel.values()], assignedTo: assignee } });
+        const expanded: { name: string | null; phone: string; address: string | null }[] = [];
+        for (const { row, count } of sSel.values()) {
+          for (let i = 0; i < Math.max(1, count); i++) expanded.push(row);
+        }
+        // Chunk to stay under server max (10000) and keep payloads snappy.
+        const CHUNK = 2000;
+        let created = 0;
+        for (let i = 0; i < expanded.length; i += CHUNK) {
+          const r = await assignSystemFn({ data: { customers: expanded.slice(i, i + CHUNK), assignedTo: assignee } });
+          created += r.created + r.updated;
+        }
+        const r = { created, updated: 0 };
         toast.success(`Assigned ${r.created + r.updated} customer(s) from system`);
       }
       onAssigned(); onClose();
@@ -924,7 +935,8 @@ function AssignDialog({
   };
 
   const iTotal = [...iSel.values()].reduce((a, b) => a + Math.max(1, b), 0);
-  const selCount = mode === "imported" ? iTotal : sSel.size;
+  const sTotal = [...sSel.values()].reduce((a, v) => a + Math.max(1, v.count), 0);
+  const selCount = mode === "imported" ? iTotal : sTotal;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -1068,7 +1080,11 @@ function AssignDialog({
                           onCheckedChange={(v) => {
                             if (v) {
                               const n = new Map(sSel);
-                              for (const r of sRows) n.set(r.phone_normalized, { name: r.name, phone: r.phone, address: r.address });
+                              for (const r of sRows) {
+                                if (!n.has(r.phone_normalized)) {
+                                  n.set(r.phone_normalized, { row: { name: r.name, phone: r.phone, address: r.address }, count: 1 });
+                                }
+                              }
                               setSSel(n);
                             } else setSSel(new Map());
                           }}
@@ -1086,15 +1102,38 @@ function AssignDialog({
                     {sRows.map((r) => (
                       <TableRow key={r.phone_normalized}>
                         <TableCell>
-                          <Checkbox
-                            checked={sSel.has(r.phone_normalized)}
-                            onCheckedChange={(v) => {
-                              const n = new Map(sSel);
-                              if (v) n.set(r.phone_normalized, { name: r.name, phone: r.phone, address: r.address });
-                              else n.delete(r.phone_normalized);
-                              setSSel(n);
-                            }}
-                          />
+                          <div className="flex items-center gap-1">
+                            <Checkbox
+                              checked={sSel.has(r.phone_normalized)}
+                              onCheckedChange={(v) => {
+                                const n = new Map(sSel);
+                                if (v) n.set(r.phone_normalized, { row: { name: r.name, phone: r.phone, address: r.address }, count: 1 });
+                                else n.delete(r.phone_normalized);
+                                setSSel(n);
+                              }}
+                            />
+                            {sSel.has(r.phone_normalized) && (
+                              <div className="flex items-center gap-0.5 ml-1">
+                                <Button size="icon" variant="ghost" className="h-6 w-6"
+                                  onClick={() => {
+                                    const n = new Map(sSel);
+                                    const cur = n.get(r.phone_normalized);
+                                    if (!cur) return;
+                                    n.set(r.phone_normalized, { row: cur.row, count: Math.max(1, cur.count - 1) });
+                                    setSSel(n);
+                                  }}>−</Button>
+                                <span className="text-xs w-5 text-center font-mono">{sSel.get(r.phone_normalized)?.count ?? 1}</span>
+                                <Button size="icon" variant="ghost" className="h-6 w-6"
+                                  onClick={() => {
+                                    const n = new Map(sSel);
+                                    const cur = n.get(r.phone_normalized);
+                                    if (!cur) return;
+                                    n.set(r.phone_normalized, { row: cur.row, count: cur.count + 1 });
+                                    setSSel(n);
+                                  }}>+</Button>
+                              </div>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>{r.name ?? "—"}</TableCell>
                         <TableCell className="font-mono text-xs">{r.phone}</TableCell>
