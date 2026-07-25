@@ -877,7 +877,7 @@ export const assignSystemCustomersToTelesales = createServerFn({ method: "POST" 
         name: z.string().max(255).nullable(),
         phone: z.string().min(1).max(50),
         address: z.string().max(1000).nullable(),
-      })).min(1).max(1000),
+      })).min(1).max(10000),
       assignedTo: z.string().uuid().nullable(),
     }).parse(input),
   )
