@@ -364,7 +364,7 @@ async function enrichOrdersForList(context: any, orders: any[]) {
   if (previewRes.error && orderIds.length) {
     const fallback = await context.supabase
       .from("order_items")
-      .select("order_id, quantity, products(name)")
+      .select("order_id, quantity, unit_price, products(name, image_url), product_variants(image_url, attributes)")
       .in("order_id", orderIds)
       .order("created_at", { ascending: true });
     if (!fallback.error) {
@@ -374,7 +374,12 @@ async function enrichOrdersForList(context: any, orders: any[]) {
         const bucket = grouped.get(orderId) ?? { item_count: 0, preview_items: [] };
         bucket.item_count += 1;
         if (bucket.preview_items.length < 2) {
-          bucket.preview_items.push({ quantity: (item as any).quantity, products: (item as any).products ?? null });
+          bucket.preview_items.push({
+            quantity: (item as any).quantity,
+            unit_price: (item as any).unit_price,
+            products: (item as any).products ?? null,
+            product_variants: (item as any).product_variants ?? null,
+          });
         }
         grouped.set(orderId, bucket);
       }
