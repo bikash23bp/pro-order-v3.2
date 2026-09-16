@@ -742,7 +742,7 @@ function OrdersPage() {
 
   const countsQuery = useQuery({
     queryKey: countsQueryKey,
-    enabled: !!session && !debouncedQ && (!search.dup || dupePhonesReady),
+    enabled: !!session && (!search.dup || dupePhonesReady),
     staleTime: ORDER_LIST_STALE_MS,
     gcTime: ORDER_LIST_GC_MS,
     refetchOnWindowFocus: true,
