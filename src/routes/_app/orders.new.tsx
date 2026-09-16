@@ -26,7 +26,7 @@ import { TAG_LABEL } from "@/lib/tags.functions";
 import { ProductPickerDialog } from "@/components/orders/ProductPickerDialog";
 import { OrderLineItemRow } from "@/components/orders/OrderLineItemRow";
 import { BlockCustomerDialog } from "@/components/customers/BlockCustomerDialog";
-import { checkBlocked, unblockCustomer, getMyIp } from "@/lib/blocked-customers.functions";
+import { checkBlocked, unblockCustomer } from "@/lib/blocked-customers.functions";
 import { toAsciiDigits, extractBDPhone, normalizeBDPhone } from "@/lib/phone-paste";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -134,17 +134,6 @@ function NewOrderPage() {
   const [blockDialogOpen, setBlockDialogOpen] = useState(false);
   const checkBlockedFn = useServerFn(checkBlocked);
   const unblockFn = useServerFn(unblockCustomer);
-  const fetchMyIp = useServerFn(getMyIp);
-  const [myIp, setMyIp] = useState<string | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const r = await fetchMyIp();
-        setMyIp(r.ip ?? null);
-      } catch { setMyIp(null); }
-    })();
-  }, [fetchMyIp]);
 
   useEffect(() => {
     const digits = customerPhone.replace(/\D/g, "");
@@ -175,18 +164,17 @@ function NewOrderPage() {
     return () => { cancelled = true; clearTimeout(t); };
   }, [customerPhone, customerTypeLocked]);
 
-  // Blocked-customer check (phone AND/OR current IP)
+  // Blocked-customer check (by phone only — the staff device's own IP is not
+  // a signal for whether this customer is blocked, and including it caused
+  // every order to show BLOCKED whenever that shared IP was ever blocked).
   useEffect(() => {
     const digits = customerPhone.replace(/\D/g, "");
     const phoneReady = digits.length >= 11;
-    if (!phoneReady && !myIp) { setBlockInfo(null); return; }
+    if (!phoneReady) { setBlockInfo(null); return; }
     let cancelled = false;
     const t = setTimeout(async () => {
       try {
-        const r = await checkBlockedFn({ data: {
-          phone: phoneReady ? customerPhone : undefined,
-          ip: myIp ?? undefined,
-        } });
+        const r = await checkBlockedFn({ data: { phone: customerPhone } });
         if (cancelled) return;
         if (r.blocked) {
           setBlockInfo({ reason: r.reason, blocked_by_name: r.blocked_by_name, blocked_at: r.blocked_at });
@@ -198,7 +186,7 @@ function NewOrderPage() {
       }
     }, 400);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [customerPhone, myIp, checkBlockedFn]);
+  }, [customerPhone, checkBlockedFn]);
 
   const handleUnblock = async () => {
     const digits = customerPhone.replace(/\D/g, "").slice(-11);
